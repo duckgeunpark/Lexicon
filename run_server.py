@@ -13,6 +13,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import webview
 
+if sys.platform.startswith('win'):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 # FastAPI 앱 초기화
 app = FastAPI(title="Lexicon API")
 
@@ -79,21 +83,20 @@ def run_uvicorn_server():
 
 def start_webview():
     """PyWebView 데스크톱 앱 시작"""
-    # FastAPI 서버가 시작될 때까지 대기
     time.sleep(2)
-
-    # PyWebView 윈도우 생성
+        
     window = webview.create_window(
-        title='Lexicon - Language Learning Quiz',
+        title='Lexicon',
         url='http://127.0.0.1:8000',
         width=800,
         height=600,
-        min_size=(800, 600),
+        min_size=(700, 500),
         resizable=True,
         fullscreen=False,
-        background_color='#f5f5f5'
-    )
+        background_color='#f5f5f5',
 
+    )
+    
     webview.start(debug=False)
 
 def main():

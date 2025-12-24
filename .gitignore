@@ -46,4 +46,6 @@ logs/
 # Environment
 .env
 .env.local
-.claude
+.claude/
+.build
+.dist
