@@ -1,0 +1,22 @@
+{
+  "quiz_file": "quiz",
+  "language1": "ja",
+  "language2": "en",
+  "question_pattern": "A>B",
+  "random_patterns": {
+    "A>B": true,
+    "B>A": true,
+    "img>A": false,
+    "img>B": false,
+    "img>A,B": false
+  },
+  "quiz_type": "random",
+  "quiz_types": {
+    "subjective": false,
+    "multiple_choice": true
+  },
+  "order_mode": "random",
+  "selected_categories": [
+    "hiragana"
+  ]
+}

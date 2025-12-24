@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lexicon - 언어 학습</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <div class="app-header">
+        <div class="header-content">
+            <div class="logo-section">
+                <div class="logo">📖</div>
+                <h1 class="app-title">Lexicon</h1>
+            </div>
+            <div class="header-stats-actions">
+                <div class="header-stats">
+                    <span class="header-stat-value total" id="headerStatTotal">0</span>
+                    <span class="header-stat-value correct" id="headerStatCorrect">0</span>
+                    <span class="header-stat-value incorrect" id="headerStatIncorrect">0</span>
+                    <span class="header-stat-value accuracy" id="headerStatAccuracy">0%</span>
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn" id="reloadBtn" title="데이터 리로드">🔄</button>
+                    <button class="icon-btn" id="settingsBtn" title="설정">⚙️</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="app-container">
+        <!-- Loading State -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <div>문제를 불러오는 중...</div>
+        </div>
+
+        <!-- Quiz Card -->
+        <div id="quizCard" class="quiz-card" style="display: none;">
+            <div id="categoryLabel" class="category-label" style="display: none;"></div>
+            <button id="llmHelpBtn" class="llm-help-btn" title="LLM에게 질문하기">💡</button>
+            <img id="questionImage" class="quiz-image" style="display: none;" alt="Quiz Image">
+            <div id="questionText" class="quiz-question">
+                <div id="imageTooltip" class="image-tooltip" style="display: none;">
+                    <img id="tooltipImage" src="" alt="Tooltip Image">
+                </div>
+            </div>
+
+            <!-- Options Grid -->
+            <div id="optionsGrid" class="options-grid"></div>
+
+            <!-- Subjective Input -->
+            <div id="subjectiveContainer" class="subjective-container" style="display: none;">
+                <input
+                    type="text"
+                    id="subjectiveInput"
+                    class="subjective-input"
+                    placeholder="답을 입력하세요..."
+                >
+                <button id="submitBtn" class="subjective-submit-btn" title="제출">→</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">⚙️ 설정</h2>
+                <div class="file-selector-container">
+                    <label for="jsonFileSelect" class="file-select-label" title="JSON 파일 선택">📂</label>
+                    <select id="jsonFileSelect" class="file-select-dropdown">
+                        <option value="">로딩중...</option>
+                    </select>
+                </div>
+                <button class="modal-close" id="closeModal">×</button>
+            </div>
+
+            <!-- Modal Body (Scrollable) -->
+            <div class="modal-body">
+            <!-- Language Selection -->
+            <div class="settings-section">
+                <label class="settings-label">언어 선택</label>
+                <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: end;">
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #7F8C8D; margin-bottom: 6px;">언어1 (Key)</label>
+                        <select id="language1" class="settings-select">
+                            <option value="ko">한국어</option>
+                            <option value="ja">日本語</option>
+                            <option value="en">English</option>
+                            <option value="zh">中文</option>
+                            <option value="es">Español</option>
+                            <option value="fr">Français</option>
+                        </select>
+                    </div>
+                    <span style="font-size: 20px; color: #3498DB;">↔</span>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #7F8C8D; margin-bottom: 6px;">언어2 (Value)</label>
+                        <select id="language2" class="settings-select">
+                            <option value="ko">한국어</option>
+                            <option value="ja">日本語</option>
+                            <option value="en">English</option>
+                            <option value="zh">中文</option>
+                            <option value="es">Español</option>
+                            <option value="fr">Français</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Question Pattern -->
+            <div class="settings-section collapsible-section collapsed">
+                <div class="collapsible-header" data-section="pattern">
+                    <span>출제 패턴: <span id="pattern-current">-</span></span>
+                    <span class="collapse-icon">▷</span>
+                </div>
+                <div class="collapsible-content" id="pattern-content">
+                    <p class="settings-description">A=언어1(key) | B=언어2(value)</p>
+                    <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="pattern_mode" value="random" id="pattern_random">
+                        <span>무작위</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="pattern_mode" value="A>B" id="pattern_A_B">
+                        <span>A → B</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="pattern_mode" value="B>A" id="pattern_B_A">
+                        <span>B → A</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="pattern_mode" value="img>A" id="pattern_img_A">
+                        <span>이미지 → A</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="pattern_mode" value="img>B" id="pattern_img_B">
+                        <span>이미지 → B</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="pattern_mode" value="img>A,B" id="pattern_img_AB">
+                        <span>이미지 → A,B</span>
+                    </label>
+                </div>
+
+                <div id="randomPatternSettings" class="nested-settings" style="display: none;">
+                    <label class="settings-label">무작위 포함 패턴</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="rand_pattern_A_B">
+                            <span>A → B</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="rand_pattern_B_A">
+                            <span>B → A</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="rand_pattern_img_A">
+                            <span>이미지 → A</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="rand_pattern_img_B">
+                            <span>이미지 → B</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="rand_pattern_img_AB">
+                            <span>이미지 → A,B</span>
+                        </label>
+                    </div>
+                </div>
+                </div>
+            </div>
+
+            <!-- 문제유형 & 주제 통합 섹션 -->
+            <div class="settings-section collapsible-section collapsed">
+                <div class="collapsible-header">
+                <span>문제유형: <span id="quiz-type-current">주관식</span> || 주제: <span id="category-current">-</span></span>
+                <span class="collapse-icon">▷</span>
+                </div>
+
+                <div class="collapsible-content">
+                <!-- 문제유형 -->
+                <div class="settings-section">
+                    <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="quiz_type_checkbox" value="subjective">
+                        <span>주관식</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="quiz_type_checkbox" value="multiple_choice">
+                        <span>객관식</span>
+                    </label>
+                    </div>
+                </div>
+            
+                <!-- 주제 -->
+                <div class="settings-section">
+                    <div class="category-controls">
+                    <button type="button" id="selectAllCategories" class="category-control-btn">전체선택</button>
+                    <button type="button" id="deselectAllCategories" class="category-control-btn">전체해제</button>
+                    </div>
+                    <div class="checkbox-group" id="categoryCheckboxes"></div>
+                </div>
+                </div>
+            </div>
+  
+            <!-- Order Mode -->
+            <div class="settings-section collapsible-section collapsed">
+                <div class="collapsible-header" data-section="order">
+                    <span>출제 순서: <span id="order-current">-</span></span>
+                    <span class="collapse-icon">▷</span>
+                </div>
+                <div class="collapsible-content" id="order-content">
+                    <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="order_mode" value="random" id="order_random">
+                        <span>무작위</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="order_mode" value="forward" id="order_forward">
+                        <span>정순</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="order_mode" value="backward" id="order_backward">
+                        <span>역순</span>
+                    </label>
+                </div>
+                </div>
+            </div>
+            </div>
+            <!-- End Modal Body -->
+
+            <!-- Modal Actions (Fixed) -->
+            <div class="modal-actions">
+                <button class="modal-btn modal-btn-secondary" id="cancelBtn">취소</button>
+                <button class="modal-btn modal-btn-primary" id="saveSettingsBtn">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LLM Help Modal -->
+    <div class="modal-overlay" id="llmModal">
+        <div class="modal-content llm-modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">💡 LLM에게 질문하기</h2>
+                <button class="modal-close" id="closeLlmModal">×</button>
+            </div>
+
+            <div class="llm-modal-body">
+                <div class="llm-question-display">
+                    <label class="settings-label">현재 문제:</label>
+                    <div id="llmQuestionDisplay" class="llm-question-text"></div>
+                </div>
+
+                <div class="llm-response-area">
+                    <label class="settings-label">LLM 응답:</label>
+                    <div id="llmResponse" class="llm-response-text">
+                        여기에 LLM 응답이 표시됩니다. (현재는 기본 구조만 구현되었습니다)
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="modal-btn modal-btn-secondary" id="closeLlmModalBtn">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
