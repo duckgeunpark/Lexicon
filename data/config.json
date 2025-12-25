@@ -17,6 +17,17 @@
   },
   "order_mode": "random",
   "selected_categories": [
-    "hiragana"
-  ]
+    "hiragana",
+    "katakana"
+  ],
+  "llm": {
+    "model": "claude-3-sonnet",
+    "api_key": "asdasd"
+  },
+  "llm_prompts": {
+    "persona": "friendly_tutor",
+    "custom_system_prompt": "",
+    "temperature": 0.7,
+    "max_tokens": 1024
+  }
 }

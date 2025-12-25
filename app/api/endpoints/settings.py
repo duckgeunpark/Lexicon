@@ -37,13 +37,28 @@ async def update_settings(settings: Dict) -> Dict:
         old_quiz_file = quiz_loader.config.get("quiz_file", "quiz")
         new_quiz_file = settings.get("quiz_file", old_quiz_file)
 
-        # 설정 파일 업데이트
+        # 기존 config.json 읽기 (LLM 설정 보존용)
         config_path = Path("data/config.json")
+        existing_config = {}
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                existing_config = json.load(f)
+
+        # 새로운 설정으로 업데이트 (LLM 설정은 유지)
+        updated_config = {**settings}
+
+        # LLM 관련 설정 보존
+        if "llm" in existing_config:
+            updated_config["llm"] = existing_config["llm"]
+        if "llm_prompts" in existing_config:
+            updated_config["llm_prompts"] = existing_config["llm_prompts"]
+
+        # 설정 파일 저장
         with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(settings, f, ensure_ascii=False, indent=2)
+            json.dump(updated_config, f, ensure_ascii=False, indent=2)
 
         # 메모리에 로드
-        quiz_loader.config = settings
+        quiz_loader.config = updated_config
 
         # 퀴즈 파일이 변경되었으면 새 파일 로드
         if new_quiz_file != old_quiz_file:

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
-from .endpoints import quiz, settings
+from .endpoints import quiz, settings, llm
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -28,6 +28,7 @@ if images_path.exists():
 # 라우터 등록
 app.include_router(quiz.router, prefix="/api/quiz", tags=["Quiz"])
 app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
+app.include_router(llm.router, prefix="/api/llm", tags=["LLM"])
 
 
 @app.get("/")

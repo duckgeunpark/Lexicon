@@ -2,6 +2,7 @@
   /* Primitive Color Tokens */
   --color-white: rgba(255, 255, 255, 1);
   --color-black: rgba(0, 0, 0, 1);
+  ----color-empty: rgba(255, 255, 255, 0);
   --color-cream-50: rgba(252, 252, 249, 1);
   --color-cream-100: rgba(255, 255, 253, 1);
   --color-gray-200: rgba(245, 245, 245, 1);
@@ -115,7 +116,7 @@
   --space-20: 20px;
   --space-24: 24px;
   --space-32: 32px;
-
+  --space-40: 40px;
   /* Border Radius */
   --radius-sm: 6px;
   --radius-base: 8px;
@@ -177,7 +178,7 @@
     --color-secondary-active: rgba(var(--color-gray-400-rgb), 0.3);
     --color-border: rgba(var(--color-gray-400-rgb), 0.3);
     --color-error: var(--color-red-400);
-    --color-success: var(--color-teal-300);
+    --color-success: var(--color-blue-500);
     --color-warning: var(--color-orange-400);
     --color-info: var(--color-gray-300);
     --color-focus-ring: rgba(var(--color-teal-300-rgb), 0.4);
@@ -860,7 +861,7 @@ body {
 }
 
 .header-stat-value.correct {
-    color: var(--color-success);
+    color: var(--color-blue-500);
 }
 
 .header-stat-value.incorrect {
@@ -914,14 +915,14 @@ body {
 .quiz-card {
     background: var(--color-surface);
     border-radius: var(--radius-lg);
-    padding: var(--space-32);
-    margin-bottom: var(--space-24);
+    padding: var(--space-40);
+    /* margin-bottom: var(--space-24); */
     box-shadow: var(--shadow-md);
     border: 1px solid var(--color-card-border);
-    min-height: 400px;
+    min-height: calc(100vh - 160px);
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
     position: relative;
 }
@@ -929,8 +930,8 @@ body {
 /* Category Label */
 .category-label {
     position: absolute;
-    top: var(--space-16);
-    left: var(--space-16);
+    top: var(--space-20);
+    left: var(--space-20);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
     color: var(--color-text-secondary);
@@ -943,8 +944,8 @@ body {
 /* LLM Help Button */
 .llm-help-btn {
     position: absolute;
-    top: var(--space-16);
-    right: var(--space-16);
+    top: var(--space-20);
+    right: var(--space-20);
     width: 32px;
     height: 32px;
     border: none;
@@ -976,13 +977,14 @@ body {
   font-size: 64px;
   font-weight: 700;
   color: var(--color-primary);
-  margin-bottom: var(--space-10);
+  margin-bottom: var(--space-20);
   word-break: break-word;
 
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
+  flex-shrink: 0;
   width: 100%;
   position: relative;
   cursor: help;
@@ -1031,8 +1033,9 @@ body {
     max-width: 350px;
     height: 350px;
     object-fit: contain;
-    margin: 0 auto var(--space-32);
+    margin: 0 auto var(--space-16);
     display: block;
+    flex-shrink: 0;
     border-radius: var(--radius-md);
     background: var(--color-background);
     padding: var(--space-24);
@@ -1043,11 +1046,13 @@ body {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: var(--space-16);
-    margin-bottom: var(--space-24);
+    margin-top: auto !important;
+    margin-bottom: 0 !important;
     /* max-width: 600px; */
     margin-left: auto;
     margin-right: auto;
     width: 100%;
+    align-self: flex-end;
 }
 
 .option-button {
@@ -1147,6 +1152,9 @@ body {
     align-items: center;
     justify-content: center;
     width: 100%;
+    margin-top: auto !important;
+    margin-bottom: 0 !important;
+    align-self: flex-end;
     /* max-width: 550px; */
 }
 
@@ -1280,7 +1288,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-24) var(--space-32);
+    padding: var(--space-16);
     border-bottom: 1px solid var(--color-border);
     gap: var(--space-16);
     flex-shrink: 0;
@@ -1784,4 +1792,597 @@ body {
         width: 100%;
         justify-content: center;
     }
+}
+
+/* ============================================
+   새로고침 알림 토스트
+   ============================================ */
+.refresh-toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px) scale(0.9);
+    background: linear-gradient(135deg, var(--color-teal-600), var(--color-teal-500));
+    color: var(--color-white);
+    padding: 12px 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15),
+                0 8px 24px rgba(33, 128, 141, 0.2);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    pointer-events: none;
+    z-index: 10000;
+    white-space: nowrap;
+}
+
+.refresh-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+/* 모바일 대응 */
+@media (max-width: 768px) {
+    .refresh-toast {
+        top: 15px;
+        padding: 10px 16px;
+        font-size: var(--font-size-xs);
+        max-width: calc(100vw - 40px);
+        white-space: normal;
+        text-align: center;
+    }
+}
+
+/* ============================================
+   LLM 상태 표시 버튼 (우측 하단 고정)
+   ============================================ */
+.llm-status-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 48px;
+    height: 48px;
+    border: none;
+    background: var(--color-empty);
+    border-radius: 50%;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15),
+                0 8px 24px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    z-index: 1000;
+}
+
+.llm-status-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2),
+                0 12px 32px rgba(0, 0, 0, 0.15);
+}
+
+.llm-status-btn:active {
+    transform: scale(0.95);
+}
+
+.llm-status-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-red-500);
+    /* box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); */
+    /* transition: background-color 0.3s ease; */
+}
+
+/* LLM 상태별 색상 */
+.llm-status-btn.status-disconnected .llm-status-indicator {
+    background: var(--color-red-500);
+}
+
+.llm-status-btn.status-warning .llm-status-indicator {
+    background: var(--color-orange-500);
+}
+
+.llm-status-btn.status-connected .llm-status-indicator {
+    background: #22c55e; /* 녹색 */
+}
+
+/* ============================================
+   LLM 설정 Input
+   ============================================ */
+.settings-input {
+    width: 100%;
+    padding: var(--space-12);
+    border: 1px solid var(--color-card-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    transition: border-color 0.2s ease;
+}
+
+.settings-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(33, 128, 141, 0.1);
+}
+
+.settings-input::placeholder {
+    color: var(--color-text-secondary);
+}
+
+/* ============================================
+   LLM 연결 상태 표시
+   ============================================ */
+.llm-connection-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    padding: var(--space-16);
+    background: var(--color-background);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-card-border);
+}
+
+.llm-connection-status .status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--color-gray-400);
+    flex-shrink: 0;
+}
+
+.llm-connection-status.status-disconnected .status-indicator {
+    background: var(--color-red-500);
+}
+
+.llm-connection-status.status-warning .status-indicator {
+    background: var(--color-orange-500);
+}
+
+.llm-connection-status.status-connected .status-indicator {
+    background: #22c55e;
+}
+
+.llm-connection-status .status-text {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+/* 모바일 대응 */
+@media (max-width: 768px) {
+    .llm-status-btn {
+        bottom: 16px;
+        right: 16px;
+        width: 44px;
+        height: 44px;
+    }
+
+    .llm-status-indicator {
+        width: 18px;
+        height: 18px;
+    }
+}
+
+/* ============================================
+   LLM 채팅 모달
+   ============================================ */
+.llm-chat-modal {
+    display: flex;
+    flex-direction: column;
+    height: 80vh;
+    max-height: 700px;
+    padding: 0;
+}
+
+/* 채팅 헤더 */
+.llm-chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-12) var(--space-16);
+    border-bottom: 1px solid var(--color-card-border);
+    background: var(--color-surface);
+}
+
+.llm-chat-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+}
+
+.llm-avatar {
+    font-size: 22px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--color-teal-600), var(--color-teal-500));
+    border-radius: 50%;
+}
+
+.llm-chat-title h2 {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.llm-header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+}
+
+.llm-clear-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: var(--color-background);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.llm-clear-btn:hover {
+    background: rgba(239, 68, 68, 0.1);
+    transform: scale(1.05);
+}
+
+/* 채팅 메시지 영역 */
+.llm-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-24);
+    background: var(--color-background);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+}
+
+.llm-welcome-message {
+    text-align: center;
+    padding: var(--space-32) var(--space-16);
+    color: var(--color-text-secondary);
+}
+
+.llm-avatar-large {
+    font-size: 48px;
+    margin-bottom: var(--space-12);
+}
+
+.llm-welcome-message h3 {
+    margin: 0 0 var(--space-8) 0;
+    font-size: var(--font-size-lg);
+    color: var(--color-text);
+}
+
+.llm-welcome-message p {
+    margin: 0;
+    font-size: var(--font-size-sm);
+}
+
+/* 채팅 메시지 */
+.llm-message {
+    display: flex;
+    gap: var(--space-12);
+    margin-bottom: var(--space-12);
+    animation: messageSlideIn 0.3s ease;
+}
+
+@keyframes messageSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.llm-message.user {
+    flex-direction: row-reverse;
+}
+
+.llm-message-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.llm-message.user .llm-message-avatar {
+    background: var(--color-secondary);
+}
+
+.llm-message.assistant .llm-message-avatar {
+    background: linear-gradient(135deg, var(--color-teal-600), var(--color-teal-500));
+}
+
+.llm-message-content {
+    padding: var(--space-16) var(--space-20);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    line-height: 1.6;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    cursor: pointer;
+    user-select: text;
+    transition: all 0.2s ease;
+}
+
+.llm-message-content:hover {
+    opacity: 0.8;
+}
+
+.llm-message-content.copied {
+    background: rgba(34, 197, 94, 0.2) !important;
+    animation: copyFlash 0.5s ease;
+}
+
+@keyframes copyFlash {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+}
+
+.llm-message.user .llm-message-content {
+    background: var(--color-primary);
+    color: var(--color-white);
+    border-bottom-right-radius: 4px;
+}
+
+.llm-message.assistant .llm-message-content {
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-card-border);
+    border-bottom-left-radius: 4px;
+}
+
+.llm-message-time {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin-top: var(--space-4);
+}
+
+.llm-message.user .llm-message-time {
+    text-align: right;
+}
+
+/* 입력 영역 (하단 고정) */
+.llm-chat-input-area {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-12);
+    padding: var(--space-16);
+    border-top: 1px solid var(--color-card-border);
+    background: var(--color-surface);
+}
+
+.llm-chat-input {
+    flex: 1;
+    padding: var(--space-12) var(--space-16);
+    border: 1px solid var(--color-card-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-background);
+    color: var(--color-text);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    resize: none;
+    max-height: 120px;
+    overflow-y: auto;
+    transition: border-color 0.2s ease;
+}
+
+.llm-chat-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(33, 128, 141, 0.1);
+}
+
+.llm-chat-input::placeholder {
+    color: var(--color-text-secondary);
+}
+
+.llm-chat-send-btn {
+    width: 44px;
+    height: 44px;
+    border: none;
+    background: linear-gradient(135deg, var(--color-teal-600), var(--color-teal-500));
+    color: var(--color-white);
+    border-radius: 50%;
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.llm-chat-send-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(33, 128, 141, 0.3);
+}
+
+.llm-chat-send-btn:active {
+    transform: scale(0.95);
+}
+
+.llm-chat-send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.llm-loading {
+    display: inline-block;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* 타이핑 인디케이터 */
+.llm-typing-indicator {
+    display: flex;
+    gap: var(--space-12);
+    padding: var(--space-12);
+}
+
+.llm-typing-dots {
+    display: flex;
+    gap: 4px;
+    padding: var(--space-12) var(--space-16);
+    background: var(--color-surface);
+    border: 1px solid var(--color-card-border);
+    border-radius: var(--radius-md);
+}
+
+.llm-typing-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-text-secondary);
+    animation: typingBounce 1.4s ease-in-out infinite;
+}
+
+.llm-typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.llm-typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typingBounce {
+    0%, 60%, 100% {
+        transform: translateY(0);
+    }
+    30% {
+        transform: translateY(-8px);
+    }
+}
+
+/* 스크롤바 스타일 */
+.llm-chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.llm-chat-messages::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.llm-chat-messages::-webkit-scrollbar-thumb {
+    background: var(--color-card-border);
+    border-radius: 3px;
+}
+
+.llm-chat-messages::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-secondary);
+}
+
+/* 모바일 대응 */
+@media (max-width: 768px) {
+    .llm-chat-modal {
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+
+    .llm-message-content {
+        max-width: 85%;
+        font-size: var(--font-size-sm);
+    }
+
+    .llm-chat-input {
+        font-size: var(--font-size-sm);
+    }
+
+    .llm-chat-send-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+    }
+}
+
+/* ============================================
+   Range Slider Styles (Temperature, Max Tokens)
+   ============================================ */
+.settings-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--color-card-border);
+    outline: none;
+    cursor: pointer;
+}
+
+.settings-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.settings-range::-webkit-slider-thumb:hover {
+    background: var(--color-primary-hover);
+    transform: scale(1.2);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.settings-range::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.settings-range::-moz-range-thumb:hover {
+    background: var(--color-primary-hover);
+    transform: scale(1.2);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.settings-range:focus {
+    outline: none;
+}
+
+.settings-range:focus::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px rgba(33, 128, 141, 0.2);
+}
+
+.settings-range:focus::-moz-range-thumb {
+    box-shadow: 0 0 0 3px rgba(33, 128, 141, 0.2);
 }

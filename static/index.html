@@ -240,33 +240,178 @@
         </div>
     </div>
 
-    <!-- LLM Help Modal -->
+    <!-- LLM Chat Modal -->
     <div class="modal-overlay" id="llmModal">
-        <div class="modal-content llm-modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">💡 LLM에게 질문하기</h2>
-                <button class="modal-close" id="closeLlmModal">×</button>
+        <div class="modal-content llm-chat-modal">
+            <div class="llm-chat-header">
+                <div class="llm-chat-title">
+                    <span class="llm-avatar">💡</span>
+                    <div>
+                        <h2>AI 학습 도우미</h2>
+                    </div>
+                </div>
+                <div class="llm-header-actions">
+                    <button class="llm-clear-btn" id="llmClearBtn" title="채팅 기록 삭제">🗑️</button>
+                    <button class="modal-close" id="closeLlmModal">×</button>
+                </div>
             </div>
 
-            <div class="llm-modal-body">
-                <div class="llm-question-display">
-                    <label class="settings-label">현재 문제:</label>
-                    <div id="llmQuestionDisplay" class="llm-question-text"></div>
+            <!-- 채팅 메시지 영역 -->
+            <div class="llm-chat-messages" id="llmChatMessages">
+                <div class="llm-welcome-message">
+                    <div class="llm-avatar-large">💡</div>
+                    <h3>안녕하세요! AI 학습 도우미입니다</h3>
+                    <p>궁금한 점을 자유롭게 물어보세요</p>
+                </div>
+            </div>
+
+            <!-- 질문 입력 영역 (하단 고정) -->
+            <div class="llm-chat-input-area">
+                <textarea
+                    id="llmQuestionInput"
+                    class="llm-chat-input"
+                    rows="1"
+                    placeholder="질문을 입력하세요..."
+                ></textarea>
+                <button class="llm-chat-send-btn" id="llmSendBtn">
+                    <span>➤</span>
+                    <span class="llm-loading" style="display: none;">⋯</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LLM 설정 Modal -->
+    <div class="modal-overlay" id="llmConfigModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">🤖 LLM 설정</h2>
+                <button class="modal-close" id="closeLlmConfigModal">×</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="settings-section">
+                    <label class="settings-label">LLM 모델</label>
+                    <select id="llmModel" class="settings-select">
+                        <option value="">선택하세요</option>
+                        <optgroup label="OpenAI">
+                            <option value="gpt-4">GPT-4</option>
+                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        </optgroup>
+                        <optgroup label="Anthropic">
+                            <option value="claude-3-opus">Claude 3 Opus</option>
+                            <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+                            <option value="claude-3-haiku">Claude 3 Haiku</option>
+                        </optgroup>
+                        <optgroup label="Google">
+                            <option value="gemini-pro">Gemini Pro</option>
+                            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                        </optgroup>
+                        <optgroup label="기타">
+                            <option value="custom">직접 입력</option>
+                        </optgroup>
+                    </select>
+                    <input
+                        type="text"
+                        id="llmModelCustom"
+                        class="settings-input"
+                        placeholder="직접 입력 (예: llama-3-70b)"
+                        style="display: none; margin-top: 8px;"
+                    >
                 </div>
 
-                <div class="llm-response-area">
-                    <label class="settings-label">LLM 응답:</label>
-                    <div id="llmResponse" class="llm-response-text">
-                        여기에 LLM 응답이 표시됩니다. (현재는 기본 구조만 구현되었습니다)
+                <div class="settings-section">
+                    <label class="settings-label">API 키</label>
+                    <input
+                        type="password"
+                        id="llmApiKey"
+                        class="settings-input"
+                        placeholder="API 키를 입력하세요"
+                    >
+                </div>
+
+                <div class="settings-section">
+                    <label class="settings-label">페르소나</label>
+                    <select id="llmPersona" class="settings-select">
+                        <option value="friendly_tutor">친절한 튜터</option>
+                        <option value="professional_teacher">전문 교사</option>
+                        <option value="casual_friend">친구 같은 도우미</option>
+                        <option value="native_speaker">원어민 화자</option>
+                        <option value="grammar_expert">문법 전문가</option>
+                    </select>
+                    <p class="settings-description" id="personaDescription" style="margin-top: 8px; font-size: 12px; color: #7F8C8D;">친근하고 격려적인 언어 학습 도우미</p>
+                </div>
+
+                <div class="settings-section">
+                    <label class="settings-label">커스텀 시스템 프롬프트 (선택)</label>
+                    <textarea
+                        id="llmCustomPrompt"
+                        class="settings-input"
+                        rows="4"
+                        placeholder="사용자 정의 시스템 프롬프트를 입력하세요 (비워두면 페르소나 기본값 사용)"
+                        style="resize: vertical; font-family: inherit; padding: 10px;"
+                    ></textarea>
+                </div>
+
+                <div class="settings-section">
+                    <label class="settings-label">Temperature (창의성)</label>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <input
+                            type="range"
+                            id="llmTemperature"
+                            class="settings-range"
+                            min="0"
+                            max="2"
+                            step="0.1"
+                            value="0.7"
+                            style="flex: 1;"
+                        >
+                        <span id="temperatureValue" style="min-width: 40px; text-align: right; font-weight: 600;">0.7</span>
+                    </div>
+                    <p class="settings-description" style="margin-top: 4px; font-size: 11px; color: #95A5A6;">0.0 = 정확하고 일관된 답변 | 2.0 = 창의적이고 다양한 답변</p>
+                </div>
+
+                <div class="settings-section">
+                    <label class="settings-label">Max Tokens (답변 길이)</label>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <input
+                            type="range"
+                            id="llmMaxTokens"
+                            class="settings-range"
+                            min="256"
+                            max="4096"
+                            step="256"
+                            value="1024"
+                            style="flex: 1;"
+                        >
+                        <span id="maxTokensValue" style="min-width: 60px; text-align: right; font-weight: 600;">1024</span>
+                    </div>
+                    <p class="settings-description" style="margin-top: 4px; font-size: 11px; color: #95A5A6;">256 = 짧은 답변 | 4096 = 긴 설명</p>
+                </div>
+
+                <div class="settings-section">
+                    <div id="llmConnectionStatus" class="llm-connection-status">
+                        <span class="status-indicator"></span>
+                        <span class="status-text">연결 상태를 확인하려면 저장하세요</span>
                     </div>
                 </div>
             </div>
 
             <div class="modal-actions">
-                <button class="modal-btn modal-btn-secondary" id="closeLlmModalBtn">닫기</button>
+                <button class="modal-btn modal-btn-secondary" id="cancelLlmConfig">취소</button>
+                <button class="modal-btn modal-btn-primary" id="saveLlmConfig">저장 및 연결 테스트</button>
             </div>
         </div>
     </div>
+
+    <!-- 알림 토스트 -->
+    <div id="refreshToast" class="refresh-toast"></div>
+
+    <!-- LLM 상태 버튼 (우측 하단 고정) -->
+    <button class="llm-status-btn" id="llmStatusBtn" title="LLM 설정">
+        <span class="llm-status-indicator"></span>
+    </button>
 
     <script src="/static/app.js"></script>
 </body>

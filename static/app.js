@@ -26,7 +26,30 @@ const elements = {
     settingsModal: document.getElementById('settingsModal'),
     closeModal: document.getElementById('closeModal'),
     cancelBtn: document.getElementById('cancelBtn'),
-    saveSettingsBtn: document.getElementById('saveSettingsBtn')
+    saveSettingsBtn: document.getElementById('saveSettingsBtn'),
+    llmStatusBtn: document.getElementById('llmStatusBtn'),
+    llmConfigModal: document.getElementById('llmConfigModal'),
+    closeLlmConfigModal: document.getElementById('closeLlmConfigModal'),
+    cancelLlmConfig: document.getElementById('cancelLlmConfig'),
+    saveLlmConfig: document.getElementById('saveLlmConfig'),
+    llmModel: document.getElementById('llmModel'),
+    llmModelCustom: document.getElementById('llmModelCustom'),
+    llmApiKey: document.getElementById('llmApiKey'),
+    llmPersona: document.getElementById('llmPersona'),
+    llmCustomPrompt: document.getElementById('llmCustomPrompt'),
+    llmTemperature: document.getElementById('llmTemperature'),
+    llmMaxTokens: document.getElementById('llmMaxTokens'),
+    temperatureValue: document.getElementById('temperatureValue'),
+    maxTokensValue: document.getElementById('maxTokensValue'),
+    personaDescription: document.getElementById('personaDescription'),
+    llmConnectionStatus: document.getElementById('llmConnectionStatus'),
+    llmHelpBtn: document.getElementById('llmHelpBtn'),
+    llmModal: document.getElementById('llmModal'),
+    closeLlmModal: document.getElementById('closeLlmModal'),
+    llmClearBtn: document.getElementById('llmClearBtn'),
+    llmQuestionInput: document.getElementById('llmQuestionInput'),
+    llmSendBtn: document.getElementById('llmSendBtn'),
+    llmChatMessages: document.getElementById('llmChatMessages')
 };
 
 // ============ 초기화 ============
@@ -45,7 +68,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // 설정 로드 (UI 업데이트용)
     loadSettings();
 
+    // LLM 상태 확인
+    checkLlmStatus();
+
     // loadAvailableFiles()는 설정 열 때 호출 (openSettings)
+
+    // 설정 저장 후 새로고침 시 알림 표시
+    if (sessionStorage.getItem('settings_saved') === 'true') {
+        showToast('✅ 설정이 저장되고 새로고침되었습니다');
+        sessionStorage.removeItem('settings_saved');
+    }
 });
 
 // ============ 이벤트 리스너 ============
@@ -74,6 +106,36 @@ function initEventListeners() {
     // 패턴 라디오 버튼 변경 시 무작위 패턴 설정 표시/숨김
     document.querySelectorAll('[name="pattern_mode"]').forEach(radio => {
         radio.addEventListener('change', toggleRandomPatternSettings);
+    });
+
+    // LLM 설정 관련 이벤트 리스너
+    elements.llmStatusBtn.addEventListener('click', openLlmConfig);
+    elements.closeLlmConfigModal.addEventListener('click', closeLlmConfig);
+    elements.cancelLlmConfig.addEventListener('click', closeLlmConfig);
+    elements.saveLlmConfig.addEventListener('click', saveLlmConfiguration);
+    elements.llmModel.addEventListener('change', toggleCustomModelInput);
+    elements.llmPersona.addEventListener('change', updatePersonaDescription);
+    elements.llmTemperature.addEventListener('input', updateTemperatureValue);
+    elements.llmMaxTokens.addEventListener('input', updateMaxTokensValue);
+
+    // LLM 질문 관련 이벤트 리스너
+    elements.llmHelpBtn.addEventListener('click', openLlmHelp);
+    elements.closeLlmModal.addEventListener('click', closeLlmHelp);
+    elements.llmClearBtn.addEventListener('click', clearLlmChat);
+    elements.llmSendBtn.addEventListener('click', sendLlmQuestion);
+
+    // Enter 키로 LLM 질문 전송 (Shift+Enter는 줄바꿈)
+    elements.llmQuestionInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendLlmQuestion();
+        }
+    });
+
+    // 텍스트 입력 시 textarea 자동 높이 조절
+    elements.llmQuestionInput.addEventListener('input', () => {
+        elements.llmQuestionInput.style.height = 'auto';
+        elements.llmQuestionInput.style.height = elements.llmQuestionInput.scrollHeight + 'px';
     });
 }
 
@@ -608,6 +670,8 @@ async function saveSettings() {
 
         if (response.success) {
             // 설정이 성공적으로 저장되면 페이지 새로고침
+            // 새로고침 전에 플래그 설정
+            sessionStorage.setItem('settings_saved', 'true');
             // 새로고침 시 통계가 자동으로 초기화되고 새 설정으로 문제 로드
             window.location.reload();
         }
@@ -628,6 +692,22 @@ function showError(message) {
     elements.subjectiveContainer.style.display = 'none';
 }
 
+function showToast(message, duration = 1500) {
+    const toast = document.getElementById('refreshToast');
+    if (!toast) return;
+
+    // 메시지 업데이트
+    toast.textContent = message;
+
+    // 토스트 표시
+    toast.classList.add('show');
+
+    // 지정된 시간 후 숨김
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, duration);
+}
+
 async function openSettings() {
     // 설정을 열 때 현재 설정을 다시 로드 (취소 시 복원용)
     const currentSettings = await apiCall('/settings/');
@@ -635,8 +715,8 @@ async function openSettings() {
 
     await loadSettings();
     await loadAvailableFiles();
+    elements.settingsModal.classList.add('active');
     elements.settingsModal.style.display = 'flex';
-    document.getElementById('settingsModal').classList.add('active');
 }
 
 async function closeSettings() {
@@ -652,6 +732,7 @@ async function closeSettings() {
         section.classList.add('collapsed');
     });
 
+    elements.settingsModal.classList.remove('active');
     elements.settingsModal.style.display = 'none';
 }
 
@@ -665,6 +746,9 @@ async function reloadData() {
 
         // 새 문제 로드
         loadNextQuestion();
+
+        // 성공 알림 표시
+        showToast('🔄 데이터가 새로고침되었습니다');
     } catch (error) {
         alert(`리로드 실패: ${error.message}`);
     } finally {
@@ -681,6 +765,483 @@ function selectAllCategories(select) {
     document.querySelectorAll('[name="category"]').forEach(cb => {
         cb.checked = select;
     });
+}
+
+// ============ LLM 설정 관리 ============
+
+const PERSONA_DESCRIPTIONS = {
+    friendly_tutor: "친근하고 격려적인 언어 학습 도우미",
+    professional_teacher: "체계적이고 상세한 설명을 제공하는 교사",
+    casual_friend: "편안하고 일상적인 대화로 돕는 친구",
+    native_speaker: "원어민 관점에서 자연스러운 표현을 알려주는 도우미",
+    grammar_expert: "문법 규칙과 구조를 상세히 설명하는 전문가"
+};
+
+function updatePersonaDescription() {
+    /**
+     * 페르소나 선택에 따라 설명 업데이트
+     */
+    const selectedPersona = elements.llmPersona.value;
+    const description = PERSONA_DESCRIPTIONS[selectedPersona] || "";
+    elements.personaDescription.textContent = description;
+}
+
+function updateTemperatureValue() {
+    /**
+     * Temperature 슬라이더 값 표시 업데이트
+     */
+    const value = parseFloat(elements.llmTemperature.value).toFixed(1);
+    elements.temperatureValue.textContent = value;
+}
+
+function updateMaxTokensValue() {
+    /**
+     * Max Tokens 슬라이더 값 표시 업데이트
+     */
+    const value = elements.llmMaxTokens.value;
+    elements.maxTokensValue.textContent = value;
+}
+
+function toggleCustomModelInput() {
+    /**
+     * "직접 입력" 선택 시 커스텀 입력 필드 표시
+     */
+    const isCustom = elements.llmModel.value === 'custom';
+    elements.llmModelCustom.style.display = isCustom ? 'block' : 'none';
+}
+
+async function checkLlmStatus() {
+    /**
+     * LLM 연결 상태 확인 및 표시
+     */
+    try {
+        // LLM 설정 조회
+        const config = await apiCall('/llm/config');
+
+        // 연결 테스트
+        const testResult = await apiCall('/llm/test', { method: 'POST' });
+
+        // 상태에 따라 버튼 색상 변경
+        updateLlmStatusIndicator(testResult.status);
+    } catch (error) {
+        // 에러 발생 시 빨간색 (연결 안됨)
+        updateLlmStatusIndicator('disconnected');
+    }
+}
+
+function updateLlmStatusIndicator(status) {
+    /**
+     * LLM 상태 표시기 업데이트
+     * @param {string} status - 'connected', 'warning', 'disconnected'
+     */
+    const btn = elements.llmStatusBtn;
+
+    // 기존 상태 클래스 제거
+    btn.classList.remove('status-connected', 'status-warning', 'status-disconnected');
+
+    // 새 상태 클래스 추가
+    btn.classList.add(`status-${status}`);
+}
+
+async function openLlmConfig() {
+    /**
+     * LLM 설정 모달 열기
+     */
+    // 모달 먼저 표시 (빠른 반응)
+    elements.llmConfigModal.classList.add('active');
+    elements.llmConfigModal.style.display = 'flex';
+
+    // 로딩 상태 표시
+    updateConnectionStatus('warning', '설정 로드 중...');
+
+    try {
+        // 기존 설정 로드
+        const config = await apiCall('/llm/config');
+
+        if (config.has_config) {
+            const savedModel = config.llm_model;
+
+            // 드롭다운에 있는 모델인지 확인
+            const selectOptions = Array.from(elements.llmModel.options).map(opt => opt.value);
+
+            if (selectOptions.includes(savedModel)) {
+                // 드롭다운에 있는 모델
+                elements.llmModel.value = savedModel;
+                elements.llmModelCustom.style.display = 'none';
+            } else {
+                // 커스텀 모델
+                elements.llmModel.value = 'custom';
+                elements.llmModelCustom.value = savedModel;
+                elements.llmModelCustom.style.display = 'block';
+            }
+
+            elements.llmApiKey.value = config.api_key;
+
+            // 프롬프트 설정 로드
+            const prompts = config.prompts || {};
+            elements.llmPersona.value = prompts.persona || 'friendly_tutor';
+            elements.llmCustomPrompt.value = prompts.custom_system_prompt || '';
+            elements.llmTemperature.value = prompts.temperature || 0.7;
+            elements.llmMaxTokens.value = prompts.max_tokens || 1024;
+            updatePersonaDescription();
+            updateTemperatureValue();
+            updateMaxTokensValue();
+
+            // 연결 상태 표시
+            const testResult = await apiCall('/llm/test', { method: 'POST' });
+            updateConnectionStatus(testResult.status, testResult.message);
+        } else {
+            // 설정이 없으면 빈 값
+            elements.llmModel.value = '';
+            elements.llmModelCustom.value = '';
+            elements.llmModelCustom.style.display = 'none';
+            elements.llmApiKey.value = '';
+            elements.llmPersona.value = 'friendly_tutor';
+            elements.llmCustomPrompt.value = '';
+            elements.llmTemperature.value = 0.7;
+            elements.llmMaxTokens.value = 1024;
+            updatePersonaDescription();
+            updateTemperatureValue();
+            updateMaxTokensValue();
+            updateConnectionStatus('disconnected', '연결 상태를 확인하려면 저장하세요');
+        }
+    } catch (error) {
+        console.error('LLM 설정 로드 실패:', error);
+        updateConnectionStatus('disconnected', '설정 로드 실패');
+    }
+}
+
+function closeLlmConfig() {
+    /**
+     * LLM 설정 모달 닫기
+     */
+    elements.llmConfigModal.classList.remove('active');
+    elements.llmConfigModal.style.display = 'none';
+}
+
+async function saveLlmConfiguration() {
+    /**
+     * LLM 설정 저장 및 연결 테스트
+     */
+    try {
+        const selectedModel = elements.llmModel.value;
+        const apiKey = elements.llmApiKey.value.trim();
+
+        // 실제 모델명 결정
+        let llmModel;
+        if (selectedModel === 'custom') {
+            llmModel = elements.llmModelCustom.value.trim();
+            if (!llmModel) {
+                alert('커스텀 모델명을 입력해주세요.');
+                return;
+            }
+        } else {
+            llmModel = selectedModel;
+        }
+
+        // 유효성 검사
+        if (!llmModel || !apiKey) {
+            alert('LLM 모델과 API 키를 모두 입력해주세요.');
+            return;
+        }
+
+        // 프롬프트 설정
+        const persona = elements.llmPersona.value;
+        const customPrompt = elements.llmCustomPrompt.value.trim();
+        const temperature = parseFloat(elements.llmTemperature.value);
+        const maxTokens = parseInt(elements.llmMaxTokens.value);
+
+        // 전체 설정 저장
+        const saveResult = await apiCall('/llm/config/full', {
+            method: 'POST',
+            body: JSON.stringify({
+                llm_model: llmModel,
+                api_key: apiKey,
+                prompts: {
+                    persona: persona,
+                    custom_system_prompt: customPrompt,
+                    temperature: temperature,
+                    max_tokens: maxTokens
+                }
+            })
+        });
+
+        if (saveResult.success) {
+            // 연결 테스트
+            const testResult = await apiCall('/llm/test', { method: 'POST' });
+
+            // 상태 업데이트
+            updateConnectionStatus(testResult.status, testResult.message);
+            updateLlmStatusIndicator(testResult.status);
+
+            // 성공 메시지
+            showToast('✅ LLM 설정이 저장되었습니다');
+
+            // 0.5초 후 모달 닫기
+            setTimeout(() => {
+                closeLlmConfig();
+            }, 500);
+        }
+    } catch (error) {
+        alert(`LLM 설정 저장 실패: ${error.message}`);
+        updateConnectionStatus('warning', `저장 실패: ${error.message}`);
+    }
+}
+
+function updateConnectionStatus(status, message) {
+    /**
+     * LLM 연결 상태 표시 업데이트
+     * @param {string} status - 'connected', 'warning', 'disconnected'
+     * @param {string} message - 상태 메시지
+     */
+    const statusEl = elements.llmConnectionStatus;
+    const textEl = statusEl.querySelector('.status-text');
+
+    // 기존 상태 클래스 제거
+    statusEl.classList.remove('status-connected', 'status-warning', 'status-disconnected');
+
+    // 새 상태 클래스 추가
+    statusEl.classList.add(`status-${status}`);
+
+    // 메시지 업데이트
+    textEl.textContent = message;
+}
+
+// ============ LLM 질문 기능 ============
+
+function openLlmHelp() {
+    /**
+     * LLM 질문 모달 열기 (전구 버튼 클릭)
+     */
+    // 현재 문제 정보 가져오기
+    const category = currentQuestion?.category || '주제';
+    const questionText = currentQuestion?.question || '문제';
+
+    // 동적 플레이스홀더 생성
+    const placeholder = `${category}의 "${questionText}"가 뭐야??`;
+
+    // 플레이스홀더 설정
+    elements.llmQuestionInput.placeholder = placeholder;
+
+    // 입력 필드 초기화 (이전 질문 유지하지 않음)
+    elements.llmQuestionInput.value = '';
+
+    // 채팅 메시지 영역에 환영 메시지 표시 (이미 메시지가 있으면 초기화하지 않음)
+    if (elements.llmChatMessages.children.length === 0) {
+        elements.llmChatMessages.innerHTML = `
+            <div class="llm-welcome-message">
+                <div class="llm-avatar-large">💡</div>
+                <h3>안녕하세요! AI 학습 도우미입니다</h3>
+                <p>궁금한 점을 자유롭게 물어보세요</p>
+            </div>
+        `;
+    }
+
+    // 모달 열기
+    elements.llmModal.classList.add('active');
+    elements.llmModal.style.display = 'flex';
+
+    // 입력 필드에 포커스
+    setTimeout(() => elements.llmQuestionInput.focus(), 100);
+}
+
+function closeLlmHelp() {
+    /**
+     * LLM 질문 모달 닫기
+     */
+    elements.llmModal.classList.remove('active');
+    elements.llmModal.style.display = 'none';
+}
+
+function clearLlmChat() {
+    /**
+     * LLM 채팅 기록 삭제
+     */
+    if (confirm('채팅 기록을 모두 삭제하시겠습니까?')) {
+        elements.llmChatMessages.innerHTML = `
+            <div class="llm-welcome-message">
+                <div class="llm-avatar-large">💡</div>
+                <h3>안녕하세요! AI 학습 도우미입니다</h3>
+                <p>궁금한 점을 자유롭게 물어보세요</p>
+            </div>
+        `;
+        showToast('🗑️ 채팅 기록이 삭제되었습니다');
+    }
+}
+
+function createChatMessage(text, isUser = false) {
+    /**
+     * 채팅 메시지 버블 생성
+     * @param {string} text - 메시지 내용
+     * @param {boolean} isUser - 사용자 메시지 여부
+     * @returns {HTMLElement} 메시지 요소
+     */
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `llm-message ${isUser ? 'user' : 'assistant'}`;
+
+    const avatarSpan = document.createElement('span');
+    avatarSpan.className = 'llm-message-avatar';
+    avatarSpan.textContent = isUser ? '👤' : '💡';
+
+    const contentWrapper = document.createElement('div');
+    contentWrapper.style.display = 'flex';
+    contentWrapper.style.flexDirection = 'column';
+    contentWrapper.style.gap = '4px';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'llm-message-content';
+    contentDiv.textContent = text;
+
+    // 시간 표시
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'llm-message-time';
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    timeDiv.textContent = `${hours}:${minutes}`;
+
+    // 더블클릭으로 클립보드 복사
+    contentDiv.addEventListener('dblclick', async () => {
+        try {
+            await navigator.clipboard.writeText(text);
+            contentDiv.classList.add('copied');
+            showToast('📋 클립보드에 복사되었습니다', 1000);
+            setTimeout(() => {
+                contentDiv.classList.remove('copied');
+            }, 500);
+        } catch (error) {
+            console.error('클립보드 복사 실패:', error);
+            showToast('❌ 복사 실패', 1000);
+        }
+    });
+
+    contentWrapper.appendChild(contentDiv);
+    contentWrapper.appendChild(timeDiv);
+
+    messageDiv.appendChild(avatarSpan);
+    messageDiv.appendChild(contentWrapper);
+
+    return messageDiv;
+}
+
+function createTypingIndicator() {
+    /**
+     * 타이핑 인디케이터 생성
+     * @returns {HTMLElement} 타이핑 인디케이터 요소
+     */
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'llm-message assistant typing-indicator';
+    messageDiv.id = 'llmTypingIndicator';
+
+    const avatarSpan = document.createElement('span');
+    avatarSpan.className = 'llm-message-avatar';
+    avatarSpan.textContent = '💡';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'llm-message-content';
+
+    const dotsDiv = document.createElement('div');
+    dotsDiv.className = 'typing-dots';
+    dotsDiv.innerHTML = '<span></span><span></span><span></span>';
+
+    contentDiv.appendChild(dotsDiv);
+    messageDiv.appendChild(avatarSpan);
+    messageDiv.appendChild(contentDiv);
+
+    return messageDiv;
+}
+
+function scrollChatToBottom() {
+    /**
+     * 채팅 메시지 영역을 맨 아래로 스크롤
+     */
+    elements.llmChatMessages.scrollTop = elements.llmChatMessages.scrollHeight;
+}
+
+async function sendLlmQuestion() {
+    /**
+     * LLM에게 질문 전송 및 답변 받기 (채팅 방식)
+     */
+    const question = elements.llmQuestionInput.value.trim();
+
+    // 유효성 검사
+    if (!question) {
+        return;  // 빈 질문은 조용히 무시
+    }
+
+    // 환영 메시지 제거 (첫 번째 질문 시)
+    const welcomeMessage = elements.llmChatMessages.querySelector('.llm-welcome-message');
+    if (welcomeMessage) {
+        welcomeMessage.remove();
+    }
+
+    // 사용자 메시지 추가
+    const userMessage = createChatMessage(question, true);
+    elements.llmChatMessages.appendChild(userMessage);
+
+    // 입력 필드 초기화
+    elements.llmQuestionInput.value = '';
+    elements.llmQuestionInput.style.height = 'auto';  // 높이 초기화
+
+    // 스크롤 맨 아래로
+    scrollChatToBottom();
+
+    // 타이핑 인디케이터 표시
+    const typingIndicator = createTypingIndicator();
+    elements.llmChatMessages.appendChild(typingIndicator);
+    scrollChatToBottom();
+
+    // 버튼 비활성화
+    elements.llmSendBtn.disabled = true;
+    elements.llmQuestionInput.disabled = true;
+
+    try {
+        // 현재 문제 컨텍스트 구성
+        const context = currentQuestion ? {
+            category: currentQuestion.category,
+            question: currentQuestion.question,
+            answer: currentQuestion.answer
+        } : null;
+
+        // LLM API 호출
+        const response = await apiCall('/llm/chat', {
+            method: 'POST',
+            body: JSON.stringify({
+                question,
+                context
+            })
+        });
+
+        // 타이핑 인디케이터 제거
+        typingIndicator.remove();
+
+        if (response.success) {
+            // AI 응답 메시지 추가
+            const assistantMessage = createChatMessage(response.response, false);
+            elements.llmChatMessages.appendChild(assistantMessage);
+        } else {
+            // 에러 메시지 추가
+            const errorMessage = createChatMessage(`오류: ${response.error}`, false);
+            elements.llmChatMessages.appendChild(errorMessage);
+        }
+    } catch (error) {
+        // 타이핑 인디케이터 제거
+        typingIndicator.remove();
+
+        // 에러 메시지 추가
+        const errorMessage = createChatMessage(`요청 실패: ${error.message}`, false);
+        elements.llmChatMessages.appendChild(errorMessage);
+    } finally {
+        // 버튼 활성화
+        elements.llmSendBtn.disabled = false;
+        elements.llmQuestionInput.disabled = false;
+
+        // 스크롤 맨 아래로
+        scrollChatToBottom();
+
+        // 입력 필드에 포커스
+        elements.llmQuestionInput.focus();
+    }
 }
 
 console.log('✅ Lexicon App 로드 완료');
