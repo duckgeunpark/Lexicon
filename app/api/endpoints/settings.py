@@ -53,6 +53,14 @@ async def update_settings(settings: Dict) -> Dict:
         if "llm_prompts" in existing_config:
             updated_config["llm_prompts"] = existing_config["llm_prompts"]
 
+        # TTS 관련 설정 보존
+        if "tts" in existing_config:
+            updated_config["tts"] = existing_config["tts"]
+
+        # 폰트 관련 설정 보존
+        if "fonts" in existing_config:
+            updated_config["fonts"] = existing_config["fonts"]
+
         # 설정 파일 저장
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(updated_config, f, ensure_ascii=False, indent=2)
@@ -117,6 +125,136 @@ async def get_categories() -> Dict:
             "success": True,
             "categories": categories
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tts")
+async def get_tts_config() -> Dict:
+    """
+    TTS 설정 가져오기
+
+    Returns:
+        TTS 설정
+    """
+    config_path = Path("data/config.json")
+    tts_config = {
+        "rate": 1.0,
+        "pitch": 1.0,
+        "volume": 1.0,
+        "minNeonDuration": 500
+    }
+
+    if config_path.exists():
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            if "tts" in config:
+                tts_config = config["tts"]
+
+    return {
+        "success": True,
+        "tts": tts_config
+    }
+
+
+@router.post("/tts")
+async def update_tts_config(tts_config: Dict) -> Dict:
+    """
+    TTS 설정 업데이트
+
+    Args:
+        tts_config: TTS 설정 값
+
+    Returns:
+        업데이트 성공 여부
+    """
+    try:
+        config_path = Path("data/config.json")
+
+        # 기존 설정 읽기
+        existing_config = {}
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                existing_config = json.load(f)
+
+        # TTS 설정 업데이트
+        existing_config["tts"] = tts_config
+
+        # 파일 저장
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(existing_config, f, ensure_ascii=False, indent=2)
+
+        return {
+            "success": True,
+            "message": "TTS config updated successfully",
+            "tts": tts_config
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/fonts")
+async def get_font_config() -> Dict:
+    """
+    폰트 설정 가져오기
+
+    Returns:
+        폰트 설정
+    """
+    config_path = Path("data/config.json")
+    font_config = {
+        "categorySize": 18,
+        "questionSize": 64,
+        "answerSize": 20,
+        "fontFamily": "system-ui"
+    }
+
+    if config_path.exists():
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            if "fonts" in config:
+                font_config = config["fonts"]
+
+    return {
+        "success": True,
+        "fonts": font_config
+    }
+
+
+@router.post("/fonts")
+async def update_font_config(font_config: Dict) -> Dict:
+    """
+    폰트 설정 업데이트
+
+    Args:
+        font_config: 폰트 설정 값
+
+    Returns:
+        업데이트 성공 여부
+    """
+    try:
+        config_path = Path("data/config.json")
+
+        # 기존 설정 읽기
+        existing_config = {}
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                existing_config = json.load(f)
+
+        # 폰트 설정 업데이트
+        existing_config["fonts"] = font_config
+
+        # 파일 저장
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(existing_config, f, ensure_ascii=False, indent=2)
+
+        return {
+            "success": True,
+            "message": "Font config updated successfully",
+            "fonts": font_config
+        }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

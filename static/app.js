@@ -9,6 +9,7 @@ let stats = {
     incorrect: 0
 };
 let originalQuizFile = null;  // 설정 열 때의 원래 파일 저장
+let originalFontSettings = null;  // 설정 열 때의 원래 폰트 설정 저장
 
 // ============ DOM 요소 ============
 const elements = {
@@ -17,6 +18,9 @@ const elements = {
     questionText: document.getElementById('questionText'),
     questionImage: document.getElementById('questionImage'),
     categoryLabel: document.getElementById('categoryLabel'),
+    answerFeedback: document.getElementById('answerFeedback'),
+    correctAnswerDisplay: document.getElementById('correctAnswerDisplay'),
+    customAlert: document.getElementById('customAlert'),
     optionsGrid: document.getElementById('optionsGrid'),
     subjectiveContainer: document.getElementById('subjectiveContainer'),
     subjectiveInput: document.getElementById('subjectiveInput'),
@@ -27,6 +31,21 @@ const elements = {
     closeModal: document.getElementById('closeModal'),
     cancelBtn: document.getElementById('cancelBtn'),
     saveSettingsBtn: document.getElementById('saveSettingsBtn'),
+    ttsRate: document.getElementById('ttsRate'),
+    ttsPitch: document.getElementById('ttsPitch'),
+    ttsVolume: document.getElementById('ttsVolume'),
+    ttsNeon: document.getElementById('ttsNeon'),
+    ttsRateValue: document.getElementById('ttsRateValue'),
+    ttsPitchValue: document.getElementById('ttsPitchValue'),
+    ttsVolumeValue: document.getElementById('ttsVolumeValue'),
+    ttsNeonValue: document.getElementById('ttsNeonValue'),
+    fontFamily: document.getElementById('fontFamily'),
+    fontCategory: document.getElementById('fontCategory'),
+    fontQuestion: document.getElementById('fontQuestion'),
+    fontAnswer: document.getElementById('fontAnswer'),
+    fontCategoryValue: document.getElementById('fontCategoryValue'),
+    fontQuestionValue: document.getElementById('fontQuestionValue'),
+    fontAnswerValue: document.getElementById('fontAnswerValue'),
     llmStatusBtn: document.getElementById('llmStatusBtn'),
     llmConfigModal: document.getElementById('llmConfigModal'),
     closeLlmConfigModal: document.getElementById('closeLlmConfigModal'),
@@ -65,7 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 첫 문제 로드
     loadNextQuestion();
 
-    // 설정 로드 (UI 업데이트용)
+    // 설정 로드 (UI 업데이트용, TTS 설정 포함)
     loadSettings();
 
     // LLM 상태 확인
@@ -93,6 +112,9 @@ function initEventListeners() {
     elements.subjectiveInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') submitSubjectiveAnswer();
     });
+
+    // 문제 더블클릭 시 TTS 읽기
+    elements.questionText.addEventListener('dblclick', speakQuestion);
 
     // 설정 섹션 접기/펼치기
     document.querySelectorAll('.collapsible-header').forEach(header => {
@@ -137,6 +159,18 @@ function initEventListeners() {
         elements.llmQuestionInput.style.height = 'auto';
         elements.llmQuestionInput.style.height = elements.llmQuestionInput.scrollHeight + 'px';
     });
+
+    // TTS 설정 슬라이더 이벤트 리스너
+    elements.ttsRate.addEventListener('input', updateTtsRateValue);
+    elements.ttsPitch.addEventListener('input', updateTtsPitchValue);
+    elements.ttsVolume.addEventListener('input', updateTtsVolumeValue);
+    elements.ttsNeon.addEventListener('input', updateTtsNeonValue);
+
+    // 폰트 설정 슬라이더 이벤트 리스너
+    elements.fontFamily.addEventListener('change', applyFontSizes);
+    elements.fontCategory.addEventListener('input', updateFontCategoryValue);
+    elements.fontQuestion.addEventListener('input', updateFontQuestionValue);
+    elements.fontAnswer.addEventListener('input', updateFontAnswerValue);
 }
 
 function toggleRandomPatternSettings() {
@@ -222,10 +256,14 @@ function displayMultipleChoice(options) {
     elements.subjectiveContainer.style.display = 'none';
     elements.optionsGrid.innerHTML = '';
 
+    // 답 폰트 크기 가져오기
+    const answerSize = elements.fontAnswer ? parseInt(elements.fontAnswer.value) : 20;
+
     options.forEach((option, index) => {
         const btn = document.createElement('button');
         btn.className = 'option-button';
         btn.textContent = option.text;
+        btn.style.fontSize = `${answerSize}px`;
         btn.onclick = () => selectAnswer(option, index);
         elements.optionsGrid.appendChild(btn);
     });
@@ -238,6 +276,38 @@ function displaySubjective() {
     elements.subjectiveInput.focus();
 }
 
+// ============ 답안 피드백 표시 ============
+function showAnswerFeedback(isCorrect) {
+    let feedback = elements.answerFeedback;
+
+    // 요소가 없으면 동적으로 생성
+    if (!feedback) {
+        feedback = document.createElement('div');
+        feedback.id = 'answerFeedback';
+        feedback.className = 'answer-feedback';
+        document.body.appendChild(feedback);
+        elements.answerFeedback = feedback;
+    }
+
+    feedback.textContent = isCorrect ? '○' : '✕';
+    feedback.className = 'answer-feedback show ' + (isCorrect ? 'correct' : 'incorrect');
+
+    // 1.2초 후 페이드아웃
+    setTimeout(() => {
+        feedback.classList.remove('show');
+    }, 1200);
+}
+
+// ============ 커스텀 알림 ============
+function showCustomAlert(message, duration = 2000) {
+    elements.customAlert.textContent = message;
+    elements.customAlert.style.display = 'block';
+
+    setTimeout(() => {
+        elements.customAlert.style.display = 'none';
+    }, duration);
+}
+
 // ============ 답안 처리 ============
 async function selectAnswer(option, index) {
     const buttons = elements.optionsGrid.querySelectorAll('.option-button');
@@ -245,6 +315,9 @@ async function selectAnswer(option, index) {
 
     // 정답 표시
     buttons[index].classList.add(option.is_correct ? 'correct' : 'incorrect');
+
+    // O/X 피드백 표시
+    showAnswerFeedback(option.is_correct);
 
     if (!option.is_correct) {
         // 오답인 경우 정답 표시
@@ -269,7 +342,17 @@ async function submitSubjectiveAnswer() {
     const userAnswer = elements.subjectiveInput.value.trim();
 
     if (!userAnswer) {
-        alert('답을 입력해주세요.');
+        // alert 대신 correctAnswerDisplay에 표시
+        elements.correctAnswerDisplay.innerHTML = `
+            <strong>답을 입력해주세요</strong>
+        `;
+        elements.correctAnswerDisplay.style.display = 'block';
+
+        // 1.5초 후 자동으로 사라짐
+        setTimeout(() => {
+            elements.correctAnswerDisplay.style.display = 'none';
+        }, 1500);
+
         return;
     }
 
@@ -293,19 +376,28 @@ async function submitSubjectiveAnswer() {
             // 결과 표시
             elements.subjectiveInput.classList.add(isCorrect ? 'correct' : 'incorrect');
 
+            // O/X 피드백 표시
+            showAnswerFeedback(isCorrect);
+
             if (!isCorrect) {
-                alert(`오답입니다!\n정답: ${response.correct_answer}`);
+                // 정답 표시 (alert 대신)
+                elements.correctAnswerDisplay.innerHTML = `
+                    <strong>오답입니다!</strong>
+                    <div class="answer-text">정답: ${response.correct_answer}</div>
+                `;
+                elements.correctAnswerDisplay.style.display = 'block';
                 await saveWrongAnswer();
             }
 
             updateStats(isCorrect);
             setTimeout(() => {
                 elements.subjectiveInput.classList.remove('correct', 'incorrect');
+                elements.correctAnswerDisplay.style.display = 'none';
                 loadNextQuestion();
             }, 1500);
         }
     } catch (error) {
-        alert(`답안 확인 실패: ${error.message}`);
+        showCustomAlert(`답안 확인 실패: ${error.message}`);
     } finally {
         elements.submitBtn.disabled = false;
         elements.subjectiveInput.disabled = false;
@@ -413,6 +505,330 @@ function detectLanguagesFromQuizData(quizData) {
     };
 }
 
+// ============ TTS (Text-to-Speech) ============
+let currentSpeech = null;  // 현재 재생 중인 speech 객체
+let neonEffectTimer = null;  // 네온 효과 타이머
+
+// TTS 설정 (여기서 쉽게 조정 가능)
+const TTS_CONFIG = {
+    rate: 0.5,      // 읽기 속도 (0.1 ~ 10, 기본 1.0) - 높을수록 빠름
+    pitch: 0.7,     // 음높이 (0 ~ 2, 기본 1.0) - 높을수록 고음
+    volume: 2.0,    // 볼륨 (0 ~ 1, 기본 1.0)
+    minNeonDuration: 500  // 네온 효과 최소 지속시간 (밀리초)
+};
+
+function speakQuestion() {
+    // 브라우저가 Web Speech API를 지원하는지 확인
+    if (!('speechSynthesis' in window)) {
+        showCustomAlert('이 브라우저는 음성 읽기를 지원하지 않습니다.');
+        return;
+    }
+
+    // 현재 문제가 없으면 종료
+    if (!currentQuestion || !currentQuestion.question) {
+        console.log('TTS: 문제가 없습니다');
+        return;
+    }
+
+    // 이미 읽는 중이면 중지
+    if (currentSpeech || window.speechSynthesis.speaking) {
+        console.log('TTS: 중지');
+        window.speechSynthesis.cancel();
+
+        // 네온 효과 타이머도 취소
+        if (neonEffectTimer) {
+            clearTimeout(neonEffectTimer);
+            neonEffectTimer = null;
+        }
+
+        elements.questionText.classList.remove('reading');
+        currentSpeech = null;
+        return;
+    }
+
+    const text = currentQuestion.question;
+    const lang = detectLanguage(text);
+
+    console.log('TTS 시작:', text, '언어:', lang);
+
+    // 음성 목록 로드 대기
+    const speak = () => {
+        // 혹시 모를 이전 음성 정리
+        if (window.speechSynthesis.speaking) {
+            window.speechSynthesis.cancel();
+        }
+
+        // 짧은 지연 후 음성 재생 (interrupted 에러 방지)
+        setTimeout(() => {
+            // SpeechSynthesisUtterance 객체 생성
+            const utterance = new SpeechSynthesisUtterance(text);
+
+            // 언어 코드를 BCP 47 형식으로 변환
+            const langMap = {
+                'ko': 'ko-KR',
+                'ja': 'ja-JP',
+                'zh': 'zh-CN',
+                'es': 'es-ES',
+                'fr': 'fr-FR',
+                'en': 'en-US'
+            };
+
+            const targetLang = langMap[lang] || 'en-US';
+            utterance.lang = targetLang;
+
+            // 해당 언어의 음성 선택 (사용 가능한 경우)
+            const voices = window.speechSynthesis.getVoices();
+            const voice = voices.find(v => v.lang.startsWith(lang)) || voices.find(v => v.lang.startsWith(targetLang));
+
+            if (voice) {
+                utterance.voice = voice;
+                console.log('선택된 음성:', voice.name, voice.lang);
+            } else {
+                console.log('음성을 찾을 수 없음, 기본 음성 사용');
+            }
+
+            utterance.rate = TTS_CONFIG.rate;      // 읽기 속도
+            utterance.pitch = TTS_CONFIG.pitch;    // 음높이
+            utterance.volume = TTS_CONFIG.volume;  // 볼륨
+
+            let speechStartTime = null;  // 음성 시작 시간 기록
+
+            // 읽기 시작 시 neon 효과 추가
+            utterance.onstart = () => {
+                console.log('TTS: 시작됨');
+                speechStartTime = Date.now();
+                elements.questionText.classList.add('reading');
+                currentSpeech = utterance;
+            };
+
+            // 네온 효과 제거 함수 (최소 지속시간 보장)
+            const removeNeonEffect = () => {
+                const elapsed = speechStartTime ? Date.now() - speechStartTime : 0;
+                const remainingTime = Math.max(0, TTS_CONFIG.minNeonDuration - elapsed);
+
+                neonEffectTimer = setTimeout(() => {
+                    elements.questionText.classList.remove('reading');
+                    currentSpeech = null;
+                    neonEffectTimer = null;
+                    console.log('TTS: 네온 효과 제거됨 (총 지속시간:', elapsed + remainingTime, 'ms)');
+                }, remainingTime);
+            };
+
+            // 읽기 종료 시 neon 효과 제거
+            utterance.onend = () => {
+                console.log('TTS: 종료됨');
+                removeNeonEffect();
+            };
+
+            // 에러 발생 시 neon 효과 제거 (interrupted는 무시)
+            utterance.onerror = (event) => {
+                console.error('TTS 에러:', event.error);
+
+                // interrupted와 canceled 에러는 무시 (정상적인 중단)
+                if (event.error !== 'canceled' && event.error !== 'interrupted') {
+                    showCustomAlert(`음성 읽기 오류: ${event.error}`);
+                }
+
+                removeNeonEffect();
+            };
+
+            // 음성 재생 시작
+            window.speechSynthesis.speak(utterance);
+            console.log('TTS: speak() 호출됨');
+        }, 100); // 100ms 지연
+    };
+
+    // 음성 목록이 로드될 때까지 대기
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) {
+        console.log('음성 로딩 중...');
+        // 일회성 이벤트 리스너 사용
+        const handleVoicesChanged = () => {
+            console.log('음성 로드 완료');
+            window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
+            speak();
+        };
+        window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged);
+    } else {
+        console.log('음성 이미 로드됨:', voices.length, '개');
+        speak();
+    }
+}
+
+// ============ TTS 설정 관리 ============
+function updateTtsRateValue() {
+    const value = parseFloat(elements.ttsRate.value).toFixed(1);
+    elements.ttsRateValue.textContent = `${value}x`;
+    TTS_CONFIG.rate = parseFloat(value);
+}
+
+function updateTtsPitchValue() {
+    const value = parseFloat(elements.ttsPitch.value).toFixed(1);
+    elements.ttsPitchValue.textContent = value;
+    TTS_CONFIG.pitch = parseFloat(value);
+}
+
+function updateTtsVolumeValue() {
+    const value = parseFloat(elements.ttsVolume.value);
+    elements.ttsVolumeValue.textContent = `${Math.round(value * 100)}%`;
+    TTS_CONFIG.volume = value;
+}
+
+function updateTtsNeonValue() {
+    const value = parseInt(elements.ttsNeon.value);
+    elements.ttsNeonValue.textContent = `${value}ms`;
+    TTS_CONFIG.minNeonDuration = value;
+}
+
+async function loadTtsSettings() {
+    try {
+        const response = await apiCall('/settings/tts');
+        if (response.success && response.tts) {
+            const tts = response.tts;
+
+            // 슬라이더 값 설정
+            elements.ttsRate.value = tts.rate || 1.0;
+            elements.ttsPitch.value = tts.pitch || 1.0;
+            elements.ttsVolume.value = tts.volume || 1.0;
+            elements.ttsNeon.value = tts.minNeonDuration || 500;
+
+            // 표시값 업데이트 및 TTS_CONFIG 동기화
+            updateTtsRateValue();
+            updateTtsPitchValue();
+            updateTtsVolumeValue();
+            updateTtsNeonValue();
+
+            console.log('TTS 설정 로드 완료:', tts);
+        }
+    } catch (error) {
+        console.error('TTS 설정 로드 실패:', error);
+    }
+}
+
+async function saveTtsSettings() {
+    try {
+        const ttsConfig = {
+            rate: parseFloat(elements.ttsRate.value),
+            pitch: parseFloat(elements.ttsPitch.value),
+            volume: parseFloat(elements.ttsVolume.value),
+            minNeonDuration: parseInt(elements.ttsNeon.value)
+        };
+
+        const response = await apiCall('/settings/tts', {
+            method: 'POST',
+            body: JSON.stringify(ttsConfig)
+        });
+
+        if (response.success) {
+            console.log('TTS 설정 저장 완료:', ttsConfig);
+            // TTS_CONFIG 업데이트
+            TTS_CONFIG.rate = ttsConfig.rate;
+            TTS_CONFIG.pitch = ttsConfig.pitch;
+            TTS_CONFIG.volume = ttsConfig.volume;
+            TTS_CONFIG.minNeonDuration = ttsConfig.minNeonDuration;
+        }
+    } catch (error) {
+        console.error('TTS 설정 저장 실패:', error);
+    }
+}
+
+// ============ 폰트 설정 관리 ============
+function updateFontCategoryValue() {
+    const value = parseInt(elements.fontCategory.value);
+    elements.fontCategoryValue.textContent = `${value}px`;
+    applyFontSizes();
+}
+
+function updateFontQuestionValue() {
+    const value = parseInt(elements.fontQuestion.value);
+    elements.fontQuestionValue.textContent = `${value}px`;
+    applyFontSizes();
+}
+
+function updateFontAnswerValue() {
+    const value = parseInt(elements.fontAnswer.value);
+    elements.fontAnswerValue.textContent = `${value}px`;
+    applyFontSizes();
+}
+
+function applyFontSizes() {
+    // 폰트 종류
+    const fontFamily = elements.fontFamily.value;
+
+    // 대주제 (카테고리)
+    const categorySize = parseInt(elements.fontCategory.value);
+    elements.categoryLabel.style.fontSize = `${categorySize}px`;
+    elements.categoryLabel.style.fontFamily = fontFamily;
+
+    // 문제
+    const questionSize = parseInt(elements.fontQuestion.value);
+    elements.questionText.style.fontSize = `${questionSize}px`;
+    elements.questionText.style.fontFamily = fontFamily;
+
+    // 답 (옵션 버튼 및 주관식 입력)
+    const answerSize = parseInt(elements.fontAnswer.value);
+    const optionButtons = document.querySelectorAll('.option-button');
+    optionButtons.forEach(btn => {
+        btn.style.fontSize = `${answerSize}px`;
+        btn.style.fontFamily = fontFamily;
+    });
+    elements.subjectiveInput.style.fontSize = `${answerSize}px`;
+    elements.subjectiveInput.style.fontFamily = fontFamily;
+}
+
+async function loadFontSettings() {
+    try {
+        const response = await apiCall('/settings/fonts');
+        if (response.success && response.fonts) {
+            const fonts = response.fonts;
+
+            // 폰트 종류 설정
+            elements.fontFamily.value = fonts.fontFamily || 'system-ui';
+
+            // 슬라이더 값 설정
+            elements.fontCategory.value = fonts.categorySize || 18;
+            elements.fontQuestion.value = fonts.questionSize || 64;
+            elements.fontAnswer.value = fonts.answerSize || 20;
+
+            // 표시값 업데이트
+            updateFontCategoryValue();
+            updateFontQuestionValue();
+            updateFontAnswerValue();
+
+            // 폰트 적용
+            applyFontSizes();
+
+            console.log('폰트 설정 로드 완료:', fonts);
+        }
+    } catch (error) {
+        console.error('폰트 설정 로드 실패:', error);
+    }
+}
+
+async function saveFontSettings() {
+    try {
+        const fontConfig = {
+            fontFamily: elements.fontFamily.value,
+            categorySize: parseInt(elements.fontCategory.value),
+            questionSize: parseInt(elements.fontQuestion.value),
+            answerSize: parseInt(elements.fontAnswer.value)
+        };
+
+        const response = await apiCall('/settings/fonts', {
+            method: 'POST',
+            body: JSON.stringify(fontConfig)
+        });
+
+        if (response.success) {
+            console.log('폰트 설정 저장 완료:', fontConfig);
+            // 폰트 적용
+            applyFontSizes();
+        }
+    } catch (error) {
+        console.error('폰트 설정 저장 실패:', error);
+    }
+}
+
 // ============ 설정 관리 ============
 async function loadSettings() {
     try {
@@ -423,6 +839,12 @@ async function loadSettings() {
     } catch (error) {
         console.error('설정 로드 실패:', error);
     }
+
+    // TTS 설정도 로드
+    await loadTtsSettings();
+
+    // 폰트 설정도 로드
+    await loadFontSettings();
 }
 
 async function loadAvailableFiles() {
@@ -494,7 +916,7 @@ async function previewFileCategories(filename) {
         }
     } catch (error) {
         console.error('파일 미리보기 실패:', error);
-        alert('파일을 불러오는 중 오류가 발생했습니다.');
+        showCustomAlert('파일을 불러오는 중 오류가 발생했습니다.');
     }
 }
 
@@ -592,7 +1014,7 @@ async function saveSettings() {
         // 1. 검증: 출제 패턴 선택 확인
         const selectedPattern = document.querySelector('[name="pattern_mode"]:checked');
         if (!selectedPattern) {
-            alert('출제 패턴을 선택해주세요.');
+            showCustomAlert('출제 패턴을 선택해주세요.');
             return;
         }
 
@@ -608,7 +1030,7 @@ async function saveSettings() {
             ].some(checked => checked);
 
             if (!randomPatternsChecked) {
-                alert('무작위 패턴을 사용하려면 최소 1개 이상의 패턴을 선택해주세요.');
+                showCustomAlert('무작위 패턴을 사용하려면 최소 1개 이상의 패턴을 선택해주세요.', 2500);
                 return;
             }
         }
@@ -620,21 +1042,21 @@ async function saveSettings() {
         ].some(checked => checked);
 
         if (!quizTypesChecked) {
-            alert('문제 유형을 최소 1개 이상 선택해주세요.');
+            showCustomAlert('문제 유형을 최소 1개 이상 선택해주세요.');
             return;
         }
 
         // 4. 검증: 출제 순서 선택 확인
         const selectedOrder = document.querySelector('[name="order_mode"]:checked');
         if (!selectedOrder) {
-            alert('출제 순서를 선택해주세요.');
+            showCustomAlert('출제 순서를 선택해주세요.');
             return;
         }
 
         // 5. 검증: 주제(카테고리) 최소 1개 이상 선택
         const selectedCategories = Array.from(document.querySelectorAll('[name="category"]:checked')).map(cb => cb.value);
         if (selectedCategories.length === 0) {
-            alert('주제를 최소 1개 이상 선택해주세요.');
+            showCustomAlert('주제를 최소 1개 이상 선택해주세요.');
             return;
         }
 
@@ -669,6 +1091,12 @@ async function saveSettings() {
         });
 
         if (response.success) {
+            // TTS 설정도 저장
+            await saveTtsSettings();
+
+            // 폰트 설정도 저장
+            await saveFontSettings();
+
             // 설정이 성공적으로 저장되면 페이지 새로고침
             // 새로고침 전에 플래그 설정
             sessionStorage.setItem('settings_saved', 'true');
@@ -676,7 +1104,7 @@ async function saveSettings() {
             window.location.reload();
         }
     } catch (error) {
-        alert(`설정 저장 실패: ${error.message}`);
+        showCustomAlert(`설정 저장 실패: ${error.message}`);
     }
 }
 
@@ -713,6 +1141,14 @@ async function openSettings() {
     const currentSettings = await apiCall('/settings/');
     originalQuizFile = currentSettings.settings?.quiz_file;  // 원래 파일 저장
 
+    // 현재 폰트 설정 저장 (취소 시 복원용)
+    originalFontSettings = {
+        fontFamily: elements.fontFamily.value,
+        categorySize: parseInt(elements.fontCategory.value),
+        questionSize: parseInt(elements.fontQuestion.value),
+        answerSize: parseInt(elements.fontAnswer.value)
+    };
+
     await loadSettings();
     await loadAvailableFiles();
     elements.settingsModal.classList.add('active');
@@ -725,6 +1161,22 @@ async function closeSettings() {
     if (originalQuizFile && currentFile !== originalQuizFile) {
         await apiCall(`/quiz/load-file?filename=${originalQuizFile}`, { method: 'POST' });
         await loadSettings();  // 설정도 원래대로 복구
+    }
+
+    // 폰트 설정 원래대로 복구
+    if (originalFontSettings) {
+        elements.fontFamily.value = originalFontSettings.fontFamily;
+        elements.fontCategory.value = originalFontSettings.categorySize;
+        elements.fontQuestion.value = originalFontSettings.questionSize;
+        elements.fontAnswer.value = originalFontSettings.answerSize;
+
+        // 표시값 업데이트
+        updateFontCategoryValue();
+        updateFontQuestionValue();
+        updateFontAnswerValue();
+
+        // 폰트 적용
+        applyFontSizes();
     }
 
     // 모든 섹션 접기
@@ -750,7 +1202,7 @@ async function reloadData() {
         // 성공 알림 표시
         showToast('🔄 데이터가 새로고침되었습니다');
     } catch (error) {
-        alert(`리로드 실패: ${error.message}`);
+        showCustomAlert(`리로드 실패: ${error.message}`);
     } finally {
         elements.reloadBtn.disabled = false;
     }
@@ -932,7 +1384,7 @@ async function saveLlmConfiguration() {
         if (selectedModel === 'custom') {
             llmModel = elements.llmModelCustom.value.trim();
             if (!llmModel) {
-                alert('커스텀 모델명을 입력해주세요.');
+                showCustomAlert('커스텀 모델명을 입력해주세요.');
                 return;
             }
         } else {
@@ -941,7 +1393,7 @@ async function saveLlmConfiguration() {
 
         // 유효성 검사
         if (!llmModel || !apiKey) {
-            alert('LLM 모델과 API 키를 모두 입력해주세요.');
+            showCustomAlert('LLM 모델과 API 키를 모두 입력해주세요.');
             return;
         }
 
@@ -983,7 +1435,7 @@ async function saveLlmConfiguration() {
             }, 500);
         }
     } catch (error) {
-        alert(`LLM 설정 저장 실패: ${error.message}`);
+        showCustomAlert(`LLM 설정 저장 실패: ${error.message}`);
         updateConnectionStatus('warning', `저장 실패: ${error.message}`);
     }
 }
@@ -1057,7 +1509,6 @@ function clearLlmChat() {
     /**
      * LLM 채팅 기록 삭제
      */
-    if (confirm('채팅 기록을 모두 삭제하시겠습니까?')) {
         elements.llmChatMessages.innerHTML = `
             <div class="llm-welcome-message">
                 <div class="llm-avatar-large">💡</div>
@@ -1066,7 +1517,7 @@ function clearLlmChat() {
             </div>
         `;
         showToast('🗑️ 채팅 기록이 삭제되었습니다');
-    }
+
 }
 
 function createChatMessage(text, isUser = false) {

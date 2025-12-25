@@ -1,7 +1,7 @@
 {
-  "quiz_file": "quiz",
+  "quiz_file": "quiz_sam",
   "language1": "ja",
-  "language2": "en",
+  "language2": "ko",
   "question_pattern": "A>B",
   "random_patterns": {
     "A>B": true,
@@ -12,13 +12,12 @@
   },
   "quiz_type": "random",
   "quiz_types": {
-    "subjective": false,
+    "subjective": true,
     "multiple_choice": true
   },
   "order_mode": "random",
   "selected_categories": [
-    "hiragana",
-    "katakana"
+    "학교"
   ],
   "llm": {
     "model": "claude-3-sonnet",
@@ -26,8 +25,20 @@
   },
   "llm_prompts": {
     "persona": "friendly_tutor",
-    "custom_system_prompt": "",
+    "custom_system_prompt": "sssssss",
     "temperature": 0.7,
     "max_tokens": 1024
+  },
+  "tts": {
+    "rate": 1,
+    "pitch": 1,
+    "volume": 1,
+    "minNeonDuration": 500
+  },
+  "fonts": {
+    "fontFamily": "'Noto Sans KR', sans-serif",
+    "categorySize": 22,
+    "questionSize": 72,
+    "answerSize": 23
   }
 }
