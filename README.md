@@ -232,6 +232,16 @@ Lexicon/
 ```javascript
 console.log('🚀 Lexicon App 초기화 중...');
 ```
+## 시연
+아래 영상에서 Lexicon App의 기본 동작을 확인할 수 있습니다.  
+<video src="https://github.com/user-attachments/assets/f7f654a9-45f9-4bd5-84ec-61d0b9ce3f7d"
+       controls
+       muted
+       playsinline
+       loop>
+  브라우저에서 동영상을 재생할 수 없는 경우,
+  이 [링크](https://github.com/user-attachments/assets/f7f654a9-45f9-4bd5-84ec-61d0b9ce3f7d)를 클릭해 시청하세요.
+</video>
 
 ## 📝 라이선스
 
