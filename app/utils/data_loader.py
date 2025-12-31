@@ -318,7 +318,9 @@ class QuizDataLoader:
                 "question_type": "text",
                 "answer": lang2,
                 "answer_type": "text",
-                "image": None
+                "image": None,
+                "original_question": lang1,  # 원본 A (lang1)
+                "original_answer": lang2     # 원본 B (lang2)
             }
 
         elif pattern == "B>A":
@@ -328,7 +330,9 @@ class QuizDataLoader:
                 "question_type": "text",
                 "answer": lang1,
                 "answer_type": "text",
-                "image": None
+                "image": None,
+                "original_question": lang1,  # 원본 A (lang1)
+                "original_answer": lang2     # 원본 B (lang2)
             }
 
         elif pattern == "img>A":
@@ -342,7 +346,9 @@ class QuizDataLoader:
                 "question_type": "image",
                 "answer": lang1,
                 "answer_type": "text",
-                "image": image_path
+                "image": image_path,
+                "original_question": lang1,  # 원본 A (lang1)
+                "original_answer": lang2     # 원본 B (lang2)
             }
 
         elif pattern == "img>B":
@@ -356,7 +362,9 @@ class QuizDataLoader:
                 "question_type": "image",
                 "answer": lang2,
                 "answer_type": "text",
-                "image": image_path
+                "image": image_path,
+                "original_question": lang1,  # 원본 A (lang1)
+                "original_answer": lang2     # 원본 B (lang2)
             }
 
         elif pattern == "img>A,B":
@@ -370,7 +378,9 @@ class QuizDataLoader:
                 "question_type": "image",
                 "answer": f"{lang1} / {lang2}",
                 "answer_type": "text",
-                "image": image_path
+                "image": image_path,
+                "original_question": lang1,  # 원본 A (lang1)
+                "original_answer": lang2     # 원본 B (lang2)
             }
 
         # 기본값
@@ -380,7 +390,9 @@ class QuizDataLoader:
             "question_type": "text",
             "answer": lang2,
             "answer_type": "text",
-            "image": None
+            "image": None,
+            "original_question": lang1,  # 원본 A (lang1)
+            "original_answer": lang2     # 원본 B (lang2)
         }
 
     def _create_options(self, pattern: str, correct_lang1: str, correct_lang2: str,

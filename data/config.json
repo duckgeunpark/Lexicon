@@ -1,23 +1,20 @@
 {
-  "quiz_file": "quiz_sam",
-  "language1": "ja",
+  "quiz_file": "quiz_st",
+  "language1": "ko",
   "language2": "ko",
-  "question_pattern": "A>B",
+  "question_pattern": "B>A",
   "random_patterns": {
-    "A>B": true,
-    "B>A": true,
-    "img>A": false,
-    "img>B": false,
-    "img>A,B": false
+    "A>B": false,
+    "B>A": false
   },
   "quiz_type": "random",
   "quiz_types": {
-    "subjective": true,
+    "subjective": false,
     "multiple_choice": true
   },
   "order_mode": "random",
   "selected_categories": [
-    "학교"
+    "4과목_네트워크"
   ],
   "llm": {
     "model": "claude-3-sonnet",
@@ -37,8 +34,18 @@
   },
   "fonts": {
     "fontFamily": "'Noto Sans KR', sans-serif",
-    "categorySize": 22,
-    "questionSize": 72,
-    "answerSize": 23
+    "categorySize": 12,
+    "questionSize": 24,
+    "answerSize": 14
+  },
+  "system": {
+    "nextQuestionDelay": 500,
+    "shortcuts": {
+      "tts": "S",
+      "llm": "L",
+      "reload": "R",
+      "settings": "?",
+      "exit": "Escape"
+    }
   }
 }

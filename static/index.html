@@ -46,7 +46,23 @@
         <div id="quizCard" class="quiz-card" style="display: none;">
             <div id="quiz" class="quiz-container">
                 <div id="categoryLabel" class="category-label" style="display: none;"></div>
-                <button id="llmHelpBtn" class="llm-help-btn" title="LLM에게 질문하기">💡</button>
+                <button id="speakerBtn" class="speaker-btn" title="문제 읽기">🔊</button>
+
+                <!-- TTS 재생 중 표시 -->
+                <div id="ttsPlayingIndicator" class="tts-playing-indicator" style="display: none;">
+                    <div class="sound-wave">
+                        <span class="bar"></span>
+                        <span class="bar"></span>
+                        <span class="bar"></span>
+                        <span class="bar"></span>
+                        <span class="bar"></span>
+                    </div>
+                    <div class="tts-progress-container">
+                        <div class="tts-progress-bar" id="ttsProgressBar"></div>
+                    </div>
+                </div>
+
+                <button id="llmHelpBtn" class="llm-help-btn" title="LLM에게 질문하기">🤖</button>
                 <img id="questionImage" class="quiz-image"s alt="Quiz Image">
                 <div id="questionText" class="quiz-question">
                     <div id="imageTooltip" class="image-tooltip" style="display: none;">
@@ -137,44 +153,6 @@
                                 <input type="radio" name="pattern_mode" value="B>A" id="pattern_B_A">
                                 <span>B → A</span>
                             </label>
-                            <label class="radio-label">
-                                <input type="radio" name="pattern_mode" value="img>A" id="pattern_img_A">
-                                <span>이미지 → A</span>
-                            </label>
-                            <label class="radio-label">
-                                <input type="radio" name="pattern_mode" value="img>B" id="pattern_img_B">
-                                <span>이미지 → B</span>
-                            </label>
-                            <label class="radio-label">
-                                <input type="radio" name="pattern_mode" value="img>A,B" id="pattern_img_AB">
-                                <span>이미지 → A,B</span>
-                            </label>
-                        </div>
-
-                        <div id="randomPatternSettings" class="nested-settings" style="display: none;">
-                            <label class="settings-label">무작위 포함 패턴</label>
-                            <div class="checkbox-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="rand_pattern_A_B">
-                                    <span>A → B</span>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="rand_pattern_B_A">
-                                    <span>B → A</span>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="rand_pattern_img_A">
-                                    <span>이미지 → A</span>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="rand_pattern_img_B">
-                                    <span>이미지 → B</span>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="rand_pattern_img_AB">
-                                    <span>이미지 → A,B</span>
-                                </label>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -383,7 +361,63 @@
                             </div>
 
                             <div style="padding: 12px; background: rgba(var(--color-primary-rgb), 0.1); border-radius: 8px; font-size: 13px; color: var(--color-text);">
-                                💡 <strong>팁:</strong> 문제를 더블클릭하면 TTS로 읽어줍니다
+                                💡 <strong>팁:</strong> 🔊 스피커 버튼을 클릭하면 TTS로 읽어줍니다
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Settings -->
+                <div class="settings-section collapsible-section collapsed">
+                    <div class="collapsible-header" data-section="system">
+                        <span>시스템 설정</span>
+                        <span class="collapse-icon">▷</span>
+                    </div>
+                    <div class="collapsible-content" id="system-content">
+                        <div style="display: flex; flex-direction: column; gap: 20px;">
+                            <!-- Next Question Delay -->
+                            <div>
+                                <label class="settings-label" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span>다음 문제 딜레이</span>
+                                    <span id="nextQuestionDelayValue" style="color: var(--color-primary); font-weight: 600;">1500ms</span>
+                                </label>
+                                <input type="range" id="nextQuestionDelay" min="0" max="5000" step="100" value="1500"
+                                       style="width: 100%; margin-top: 8px;">
+                                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #7F8C8D; margin-top: 4px;">
+                                    <span>즉시 (0ms)</span>
+                                    <span>5초 (5000ms)</span>
+                                </div>
+                            </div>
+
+                            <!-- Keyboard Shortcuts -->
+                            <div>
+                                <label class="settings-label">단축키 설정</label>
+                                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 8px;">
+                                    <div class="shortcut-item">
+                                        <label style="flex: 1; font-size: 14px; color: var(--color-text);">TTS 듣기 (🔊)</label>
+                                        <input type="text" id="shortcutTTS" class="shortcut-input" placeholder="S" maxlength="1" value="S">
+                                    </div>
+                                    <div class="shortcut-item">
+                                        <label style="flex: 1; font-size: 14px; color: var(--color-text);">LLM 도우미 (🤖)</label>
+                                        <input type="text" id="shortcutLLM" class="shortcut-input" placeholder="L" maxlength="1" value="L">
+                                    </div>
+                                    <div class="shortcut-item">
+                                        <label style="flex: 1; font-size: 14px; color: var(--color-text);">새로고침 (🔄)</label>
+                                        <input type="text" id="shortcutReload" class="shortcut-input" placeholder="R" maxlength="1" value="R">
+                                    </div>
+                                    <div class="shortcut-item">
+                                        <label style="flex: 1; font-size: 14px; color: var(--color-text);">설정 (⚙️)</label>
+                                        <input type="text" id="shortcutSettings" class="shortcut-input" placeholder="," maxlength="1" value=",">
+                                    </div>
+                                    <div class="shortcut-item">
+                                        <label style="flex: 1; font-size: 14px; color: var(--color-text);">나가기 (Escape)</label>
+                                        <input type="text" id="shortcutExit" class="shortcut-input" placeholder="ESC" value="ESC" readonly>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="padding: 12px; background: rgba(var(--color-primary-rgb), 0.1); border-radius: 8px; font-size: 13px; color: var(--color-text);">
+                                💡 <strong>팁:</strong> 단축키는 대소문자를 구분하지 않습니다
                             </div>
                         </div>
                     </div>

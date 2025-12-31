@@ -194,11 +194,33 @@ if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     print(f"✓ 정적 파일 마운트됨: /static → {STATIC_DIR}")
 
+# data 폴더 마운트 (이미지 파일 서빙)
+if DATA_DIR.exists():
+    app.mount("/data", StaticFiles(directory=str(DATA_DIR)), name="data")
+    print(f"✓ 데이터 폴더 마운트됨: /data → {DATA_DIR}")
+
 # index.html 라우트
 @app.get("/")
 async def read_root():
     """메인 페이지"""
     return FileResponse(STATIC_DIR / "index.html")
+
+
+# 서버 종료 엔드포인트
+@app.post("/api/shutdown")
+async def shutdown():
+    """서버 종료 엔드포인트"""
+    import threading
+
+    def kill_server():
+        time.sleep(0.5)  # 응답을 보낼 시간 확보
+        os._exit(0)  # 프로세스 강제 종료
+
+    # 백그라운드에서 서버 종료
+    threading.Thread(target=kill_server, daemon=True).start()
+
+    return {"success": True, "message": "Server shutting down..."}
+
 
 # ============ 서버 실행 ============
 

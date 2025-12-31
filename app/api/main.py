@@ -48,3 +48,20 @@ async def health_check():
         "status": "healthy",
         "service": "quiz-api"
     }
+
+
+@app.post("/shutdown")
+async def shutdown():
+    """서버 종료 엔드포인트"""
+    import os
+    import threading
+
+    def kill_server():
+        import time
+        time.sleep(0.5)  # 응답을 보낼 시간 확보
+        os._exit(0)  # 프로세스 강제 종료
+
+    # 백그라운드에서 서버 종료
+    threading.Thread(target=kill_server, daemon=True).start()
+
+    return {"success": True, "message": "Server shutting down..."}

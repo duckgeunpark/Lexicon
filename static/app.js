@@ -11,6 +11,18 @@ let stats = {
 let originalQuizFile = null;  // 설정 열 때의 원래 파일 저장
 let originalFontSettings = null;  // 설정 열 때의 원래 폰트 설정 저장
 
+// 시스템 설정
+let systemSettings = {
+    nextQuestionDelay: 1500,
+    shortcuts: {
+        tts: 'S',
+        llm: 'L',
+        reload: 'R',
+        settings: ',',
+        exit: 'Escape'
+    }
+};
+
 // ============ DOM 요소 ============
 const elements = {
     loading: document.getElementById('loading'),
@@ -68,7 +80,19 @@ const elements = {
     llmClearBtn: document.getElementById('llmClearBtn'),
     llmQuestionInput: document.getElementById('llmQuestionInput'),
     llmSendBtn: document.getElementById('llmSendBtn'),
-    llmChatMessages: document.getElementById('llmChatMessages')
+    llmChatMessages: document.getElementById('llmChatMessages'),
+    // 시스템 설정 관련
+    nextQuestionDelay: document.getElementById('nextQuestionDelay'),
+    nextQuestionDelayValue: document.getElementById('nextQuestionDelayValue'),
+    shortcutTTS: document.getElementById('shortcutTTS'),
+    shortcutLLM: document.getElementById('shortcutLLM'),
+    shortcutReload: document.getElementById('shortcutReload'),
+    shortcutSettings: document.getElementById('shortcutSettings'),
+    shortcutExit: document.getElementById('shortcutExit'),
+    // TTS 재생 중 표시
+    ttsPlayingIndicator: document.getElementById('ttsPlayingIndicator'),
+    ttsProgressBar: document.getElementById('ttsProgressBar'),
+    speakerBtn: document.getElementById('speakerBtn')
 };
 
 // ============ 초기화 ============
@@ -108,13 +132,14 @@ function initEventListeners() {
     elements.reloadBtn.addEventListener('click', reloadData);
     elements.submitBtn.addEventListener('click', submitSubjectiveAnswer);
 
-    // Enter 키로 주관식 제출
-    elements.subjectiveInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') submitSubjectiveAnswer();
-    });
+    // 전역 키보드 이벤트 (객관식/주관식)
+    document.addEventListener('keydown', handleGlobalKeyPress);
 
-    // 문제 더블클릭 시 TTS 읽기
-    elements.questionText.addEventListener('dblclick', speakQuestion);
+    // 스피커 아이콘 클릭 시 TTS 읽기
+    const speakerBtn = document.getElementById('speakerBtn');
+    if (speakerBtn) {
+        speakerBtn.addEventListener('click', speakQuestion);
+    }
 
     // 설정 섹션 접기/펼치기
     document.querySelectorAll('.collapsible-header').forEach(header => {
@@ -124,11 +149,6 @@ function initEventListeners() {
     // 카테고리 전체 선택/해제
     document.getElementById('selectAllCategories')?.addEventListener('click', () => selectAllCategories(true));
     document.getElementById('deselectAllCategories')?.addEventListener('click', () => selectAllCategories(false));
-
-    // 패턴 라디오 버튼 변경 시 무작위 패턴 설정 표시/숨김
-    document.querySelectorAll('[name="pattern_mode"]').forEach(radio => {
-        radio.addEventListener('change', toggleRandomPatternSettings);
-    });
 
     // LLM 설정 관련 이벤트 리스너
     elements.llmStatusBtn.addEventListener('click', openLlmConfig);
@@ -171,15 +191,9 @@ function initEventListeners() {
     elements.fontCategory.addEventListener('input', updateFontCategoryValue);
     elements.fontQuestion.addEventListener('input', updateFontQuestionValue);
     elements.fontAnswer.addEventListener('input', updateFontAnswerValue);
-}
 
-function toggleRandomPatternSettings() {
-    const randomPatternSettings = document.getElementById('randomPatternSettings');
-    const isRandomSelected = document.getElementById('pattern_random')?.checked;
-
-    if (randomPatternSettings) {
-        randomPatternSettings.style.display = isRandomSelected ? 'block' : 'none';
-    }
+    // 시스템 설정 이벤트 리스너
+    elements.nextQuestionDelay.addEventListener('input', updateNextQuestionDelayValue);
 }
 
 // ============ API 호출 ============
@@ -262,8 +276,20 @@ function displayMultipleChoice(options) {
     options.forEach((option, index) => {
         const btn = document.createElement('button');
         btn.className = 'option-button';
-        btn.textContent = option.text;
-        btn.style.fontSize = `${answerSize}px`;
+        btn.setAttribute('data-index', index);
+
+        // 번호 표시 추가
+        const numberSpan = document.createElement('span');
+        numberSpan.className = 'option-number';
+        numberSpan.textContent = index + 1;
+
+        // 텍스트 추가
+        const textSpan = document.createElement('span');
+        textSpan.textContent = option.text;
+        textSpan.style.fontSize = `${answerSize}px`;
+
+        btn.appendChild(numberSpan);
+        btn.appendChild(textSpan);
         btn.onclick = () => selectAnswer(option, index);
         elements.optionsGrid.appendChild(btn);
     });
@@ -274,6 +300,125 @@ function displaySubjective() {
     elements.subjectiveContainer.style.display = 'flex';
     elements.subjectiveInput.value = '';
     elements.subjectiveInput.focus();
+}
+
+// ============ 전역 키보드 이벤트 핸들러 ============
+function handleGlobalKeyPress(e) {
+    // 입력 필드에 포커스가 있는 경우 (설정 모달의 단축키 입력 등)
+    const isInputFocused = document.activeElement.tagName === 'INPUT' &&
+                          document.activeElement !== elements.subjectiveInput;
+    const isTextareaFocused = document.activeElement.tagName === 'TEXTAREA';
+
+    // 모달 열림 상태 확인
+    const isSettingsModalOpen = elements.settingsModal.style.display === 'flex';
+    const isLlmModalOpen = elements.llmModal.style.display === 'flex';
+    const isLlmConfigModalOpen = elements.llmConfigModal.style.display === 'flex';
+    const isAnyModalOpen = isSettingsModalOpen || isLlmModalOpen || isLlmConfigModalOpen;
+
+    // ESC 키 처리 (모달 닫기 또는 프로그램 종료)
+    if (e.key === systemSettings.shortcuts.exit) {
+        e.preventDefault();
+
+        // 모달이 열려있으면 모달 닫기
+        if (isSettingsModalOpen) {
+            closeSettings();
+            return;
+        }
+        if (isLlmModalOpen) {
+            closeLlmHelp();
+            return;
+        }
+        if (isLlmConfigModalOpen) {
+            closeLlmConfig();
+            return;
+        }
+
+        // 모달이 없으면 프로그램 종료
+        if (confirm('정말 나가시겠습니까?')) {
+            // 서버 종료 API 호출
+            fetch('/api/shutdown', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }).then(() => {
+                // 응답 대기 없이 창 닫기 시도
+                setTimeout(() => {
+                    window.close();
+                }, 200);
+            }).catch(() => {
+                // 실패해도 창 닫기 시도
+                window.close();
+            });
+        }
+        return;
+    }
+
+    // 단축키 처리 (모달이 열려있지 않고, 입력 필드에 포커스가 없을 때)
+    if (!isAnyModalOpen && !isInputFocused && !isTextareaFocused) {
+        const key = e.key.toUpperCase();
+
+        // TTS 듣기
+        if (key === systemSettings.shortcuts.tts.toUpperCase()) {
+            e.preventDefault();
+            speakQuestion();
+            return;
+        }
+
+        // LLM 도우미
+        if (key === systemSettings.shortcuts.llm.toUpperCase()) {
+            e.preventDefault();
+            openLlmHelp();
+            return;
+        }
+
+        // 새로고침
+        if (key === systemSettings.shortcuts.reload.toUpperCase()) {
+            e.preventDefault();
+            reloadData();
+            return;
+        }
+
+        // 설정
+        if (key === systemSettings.shortcuts.settings.toUpperCase()) {
+            e.preventDefault();
+            openSettings();
+            return;
+        }
+    }
+
+    // 모달이 열려있으면 이하 처리 무시
+    if (isAnyModalOpen) return;
+
+    // 주관식 처리
+    if (elements.subjectiveContainer.style.display === 'flex') {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+
+            // 입력 필드에 포커스가 없으면 포커스
+            if (document.activeElement !== elements.subjectiveInput) {
+                elements.subjectiveInput.focus();
+            } else {
+                // 포커스가 있으면 제출
+                submitSubjectiveAnswer();
+            }
+        }
+        return;
+    }
+
+    // 객관식 처리 (1, 2, 3, 4 키)
+    if (elements.optionsGrid.style.display === 'grid') {
+        const key = e.key;
+        if (['1', '2', '3', '4'].includes(key)) {
+            e.preventDefault();
+            const index = parseInt(key) - 1;
+            const buttons = elements.optionsGrid.querySelectorAll('.option-button');
+
+            if (buttons[index] && !buttons[index].disabled) {
+                buttons[index].click();
+            }
+        }
+    }
 }
 
 // ============ 답안 피드백 표시 ============
@@ -334,8 +479,8 @@ async function selectAnswer(option, index) {
     // 통계 업데이트
     updateStats(option.is_correct);
 
-    // 다음 문제로
-    setTimeout(loadNextQuestion, 1500);
+    // 다음 문제로 (시스템 설정의 딜레이 적용)
+    setTimeout(loadNextQuestion, systemSettings.nextQuestionDelay);
 }
 
 async function submitSubjectiveAnswer() {
@@ -394,7 +539,7 @@ async function submitSubjectiveAnswer() {
                 elements.subjectiveInput.classList.remove('correct', 'incorrect');
                 elements.correctAnswerDisplay.style.display = 'none';
                 loadNextQuestion();
-            }, 1500);
+            }, systemSettings.nextQuestionDelay);
         }
     } catch (error) {
         showCustomAlert(`답안 확인 실패: ${error.message}`);
@@ -435,12 +580,16 @@ function updateStats(isCorrect) {
 // ============ 오답 저장 ============
 async function saveWrongAnswer() {
     try {
+        // 원본 형식(A>B)으로 저장
+        const originalQuestion = currentQuestion.original_question || currentQuestion.question;
+        const originalAnswer = currentQuestion.original_answer || currentQuestion.answer;
+
         await apiCall('/quiz/save-wrong-answer', {
             method: 'POST',
             body: JSON.stringify({
                 category: currentQuestion.category,
-                question: currentQuestion.question,
-                answer: currentQuestion.answer
+                question: originalQuestion,
+                answer: originalAnswer
             })
         });
     } catch (error) {
@@ -507,14 +656,13 @@ function detectLanguagesFromQuizData(quizData) {
 
 // ============ TTS (Text-to-Speech) ============
 let currentSpeech = null;  // 현재 재생 중인 speech 객체
-let neonEffectTimer = null;  // 네온 효과 타이머
+let ttsProgressInterval = null;  // 프로그레스 바 업데이트 인터벌
 
 // TTS 설정 (여기서 쉽게 조정 가능)
 const TTS_CONFIG = {
     rate: 0.5,      // 읽기 속도 (0.1 ~ 10, 기본 1.0) - 높을수록 빠름
     pitch: 0.7,     // 음높이 (0 ~ 2, 기본 1.0) - 높을수록 고음
-    volume: 2.0,    // 볼륨 (0 ~ 1, 기본 1.0)
-    minNeonDuration: 500  // 네온 효과 최소 지속시간 (밀리초)
+    volume: 2.0     // 볼륨 (0 ~ 1, 기본 1.0)
 };
 
 function speakQuestion() {
@@ -535,13 +683,14 @@ function speakQuestion() {
         console.log('TTS: 중지');
         window.speechSynthesis.cancel();
 
-        // 네온 효과 타이머도 취소
-        if (neonEffectTimer) {
-            clearTimeout(neonEffectTimer);
-            neonEffectTimer = null;
+        // 프로그레스 바 인터벌 정리
+        if (ttsProgressInterval) {
+            clearInterval(ttsProgressInterval);
+            ttsProgressInterval = null;
         }
 
-        elements.questionText.classList.remove('reading');
+        // UI 정리
+        hideTTSIndicator();
         currentSpeech = null;
         return;
     }
@@ -578,13 +727,41 @@ function speakQuestion() {
 
             // 해당 언어의 음성 선택 (사용 가능한 경우)
             const voices = window.speechSynthesis.getVoices();
+
+            // 사용 가능한 모든 음성 로그 출력
+            console.log('=== 사용 가능한 TTS 음성 목록 ===');
+            voices.forEach((v, i) => {
+                console.log(`${i + 1}. ${v.name} (${v.lang}) - ${v.localService ? 'Local' : 'Remote'}`);
+            });
+            console.log('============================');
+
             const voice = voices.find(v => v.lang.startsWith(lang)) || voices.find(v => v.lang.startsWith(targetLang));
 
             if (voice) {
                 utterance.voice = voice;
-                console.log('선택된 음성:', voice.name, voice.lang);
+                console.log('✓ 선택된 음성:', voice.name, voice.lang);
             } else {
-                console.log('음성을 찾을 수 없음, 기본 음성 사용');
+                console.log('⚠️ ' + targetLang + ' 음성을 찾을 수 없음');
+
+                // 영어가 아닌 경우에만 알림 표시하고 재생 중단
+                if (lang !== 'en') {
+                    const languageNames = {
+                        'ko-KR': '한국어',
+                        'ja-JP': '일본어',
+                        'zh-CN': '중국어',
+                        'es-ES': '스페인어',
+                        'fr-FR': '프랑스어'
+                    };
+                    const langName = languageNames[targetLang] || targetLang;
+
+                    showCustomAlert(`${langName} 음성이 없습니다. \n Windows 설정에서 음성을 설치하세요.`);
+
+                    // TTS 재생 중단
+                    return;
+                }
+
+                // 영어인 경우는 기본 음성으로 계속 재생
+                console.log('→ 영어: 기본 음성으로 재생');
             }
 
             utterance.rate = TTS_CONFIG.rate;      // 읽기 속도
@@ -592,35 +769,33 @@ function speakQuestion() {
             utterance.volume = TTS_CONFIG.volume;  // 볼륨
 
             let speechStartTime = null;  // 음성 시작 시간 기록
+            let estimatedDuration = null;  // 예상 재생 시간
 
-            // 읽기 시작 시 neon 효과 추가
+            // 읽기 시작 시 음파 애니메이션 표시
             utterance.onstart = () => {
                 console.log('TTS: 시작됨');
                 speechStartTime = Date.now();
-                elements.questionText.classList.add('reading');
                 currentSpeech = utterance;
+
+                // 예상 재생 시간 계산 (글자 수 기반, rate 고려)
+                // 평균적으로 영어는 분당 150단어, 한국어/일본어는 분당 300자 정도
+                const wordsPerMinute = lang === 'en' ? 150 : 300;
+                const charactersPerMinute = wordsPerMinute * (lang === 'en' ? 5 : 1);
+                const baseMs = (text.length / charactersPerMinute) * 60 * 1000;
+                estimatedDuration = baseMs / TTS_CONFIG.rate;
+
+                // TTS 재생 중 표시
+                showTTSIndicator(estimatedDuration);
             };
 
-            // 네온 효과 제거 함수 (최소 지속시간 보장)
-            const removeNeonEffect = () => {
-                const elapsed = speechStartTime ? Date.now() - speechStartTime : 0;
-                const remainingTime = Math.max(0, TTS_CONFIG.minNeonDuration - elapsed);
-
-                neonEffectTimer = setTimeout(() => {
-                    elements.questionText.classList.remove('reading');
-                    currentSpeech = null;
-                    neonEffectTimer = null;
-                    console.log('TTS: 네온 효과 제거됨 (총 지속시간:', elapsed + remainingTime, 'ms)');
-                }, remainingTime);
-            };
-
-            // 읽기 종료 시 neon 효과 제거
+            // 읽기 종료 시 표시 제거
             utterance.onend = () => {
                 console.log('TTS: 종료됨');
-                removeNeonEffect();
+                hideTTSIndicator();
+                currentSpeech = null;
             };
 
-            // 에러 발생 시 neon 효과 제거 (interrupted는 무시)
+            // 에러 발생 시 표시 제거
             utterance.onerror = (event) => {
                 console.error('TTS 에러:', event.error);
 
@@ -629,7 +804,8 @@ function speakQuestion() {
                     showCustomAlert(`음성 읽기 오류: ${event.error}`);
                 }
 
-                removeNeonEffect();
+                hideTTSIndicator();
+                currentSpeech = null;
             };
 
             // 음성 재생 시작
@@ -653,6 +829,44 @@ function speakQuestion() {
         console.log('음성 이미 로드됨:', voices.length, '개');
         speak();
     }
+}
+
+// TTS 재생 중 표시 함수
+function showTTSIndicator(estimatedDuration) {
+    // 표시 요소 보이기
+    elements.ttsPlayingIndicator.style.display = 'flex';
+    elements.speakerBtn.classList.add('playing');
+
+    // 프로그레스 바 초기화
+    elements.ttsProgressBar.style.width = '0%';
+
+    // 프로그레스 바 애니메이션
+    const startTime = Date.now();
+    ttsProgressInterval = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min((elapsed / estimatedDuration) * 100, 100);
+        elements.ttsProgressBar.style.width = `${progress}%`;
+
+        if (progress >= 100) {
+            clearInterval(ttsProgressInterval);
+            ttsProgressInterval = null;
+        }
+    }, 50);
+}
+
+function hideTTSIndicator() {
+    // 표시 요소 숨기기
+    elements.ttsPlayingIndicator.style.display = 'none';
+    elements.speakerBtn.classList.remove('playing');
+
+    // 프로그레스 바 인터벌 정리
+    if (ttsProgressInterval) {
+        clearInterval(ttsProgressInterval);
+        ttsProgressInterval = null;
+    }
+
+    // 프로그레스 바 초기화
+    elements.ttsProgressBar.style.width = '0%';
 }
 
 // ============ TTS 설정 관리 ============
@@ -765,12 +979,12 @@ function applyFontSizes() {
     elements.questionText.style.fontSize = `${questionSize}px`;
     elements.questionText.style.fontFamily = fontFamily;
 
-    // 답 (옵션 버튼 및 주관식 입력)
+    // 답 (옵션 버튼의 텍스트 부분 및 주관식 입력)
     const answerSize = parseInt(elements.fontAnswer.value);
-    const optionButtons = document.querySelectorAll('.option-button');
-    optionButtons.forEach(btn => {
-        btn.style.fontSize = `${answerSize}px`;
-        btn.style.fontFamily = fontFamily;
+    const optionButtons = document.querySelectorAll('.option-button > span:not(.option-number)');
+    optionButtons.forEach(span => {
+        span.style.fontSize = `${answerSize}px`;
+        span.style.fontFamily = fontFamily;
     });
     elements.subjectiveInput.style.fontSize = `${answerSize}px`;
     elements.subjectiveInput.style.fontFamily = fontFamily;
@@ -829,6 +1043,76 @@ async function saveFontSettings() {
     }
 }
 
+// ============ 시스템 설정 관리 ============
+function updateNextQuestionDelayValue() {
+    const value = parseInt(elements.nextQuestionDelay.value);
+    elements.nextQuestionDelayValue.textContent = `${value}ms`;
+    systemSettings.nextQuestionDelay = value;
+}
+
+async function loadSystemSettings() {
+    try {
+        const response = await apiCall('/settings/system');
+        if (response.success && response.system) {
+            const system = response.system;
+
+            // 다음 문제 딜레이
+            elements.nextQuestionDelay.value = system.nextQuestionDelay || 1500;
+            updateNextQuestionDelayValue();
+
+            // 단축키
+            if (system.shortcuts) {
+                elements.shortcutTTS.value = system.shortcuts.tts || 'S';
+                elements.shortcutLLM.value = system.shortcuts.llm || 'L';
+                elements.shortcutReload.value = system.shortcuts.reload || 'R';
+                elements.shortcutSettings.value = system.shortcuts.settings || ',';
+
+                // systemSettings 업데이트
+                systemSettings.shortcuts = {
+                    tts: system.shortcuts.tts || 'S',
+                    llm: system.shortcuts.llm || 'L',
+                    reload: system.shortcuts.reload || 'R',
+                    settings: system.shortcuts.settings || ',',
+                    exit: 'Escape'
+                };
+            }
+
+            console.log('시스템 설정 로드 완료:', system);
+        }
+    } catch (error) {
+        console.error('시스템 설정 로드 실패:', error);
+    }
+}
+
+async function saveSystemSettings() {
+    try {
+        const systemConfig = {
+            nextQuestionDelay: parseInt(elements.nextQuestionDelay.value),
+            shortcuts: {
+                tts: elements.shortcutTTS.value.toUpperCase() || 'S',
+                llm: elements.shortcutLLM.value.toUpperCase() || 'L',
+                reload: elements.shortcutReload.value.toUpperCase() || 'R',
+                settings: elements.shortcutSettings.value || ',',
+                exit: 'Escape'
+            }
+        };
+
+        const response = await apiCall('/settings/system', {
+            method: 'POST',
+            body: JSON.stringify(systemConfig)
+        });
+
+        if (response.success) {
+            console.log('시스템 설정 저장 완료:', systemConfig);
+            // systemSettings 업데이트
+            systemSettings.nextQuestionDelay = systemConfig.nextQuestionDelay;
+            systemSettings.shortcuts = systemConfig.shortcuts;
+        }
+    } catch (error) {
+        console.error('시스템 설정 저장 실패:', error);
+    }
+}
+
 // ============ 설정 관리 ============
 async function loadSettings() {
     try {
@@ -845,6 +1129,9 @@ async function loadSettings() {
 
     // 폰트 설정도 로드
     await loadFontSettings();
+
+    // 시스템 설정도 로드
+    await loadSystemSettings();
 }
 
 async function loadAvailableFiles() {
@@ -939,19 +1226,6 @@ function populateSettings(settings) {
         patternCurrent.textContent = pattern === 'random' ? '무작위' : pattern;
     }
 
-    // 무작위 패턴 설정
-    if (settings.random_patterns) {
-        Object.entries(settings.random_patterns).forEach(([key, value]) => {
-            const element = document.getElementById(`rand_pattern_${key.replace('>', '_')}`);
-            if (element) {
-                element.checked = value;
-            }
-        });
-    }
-
-    // 무작위 패턴 설정 표시/숨김
-    toggleRandomPatternSettings();
-
     // 문제 유형
     const quizTypes = [];
     document.querySelectorAll('[name="quiz_type_checkbox"]').forEach(cb => {
@@ -1018,24 +1292,9 @@ async function saveSettings() {
             return;
         }
 
-        // 2. 검증: 무작위 패턴 선택 시 최소 1개 이상 체크
         const pattern = selectedPattern.value;
-        if (pattern === 'random') {
-            const randomPatternsChecked = [
-                document.getElementById('rand_pattern_A_B')?.checked,
-                document.getElementById('rand_pattern_B_A')?.checked,
-                document.getElementById('rand_pattern_img_A')?.checked,
-                document.getElementById('rand_pattern_img_B')?.checked,
-                document.getElementById('rand_pattern_img_AB')?.checked
-            ].some(checked => checked);
 
-            if (!randomPatternsChecked) {
-                showCustomAlert('무작위 패턴을 사용하려면 최소 1개 이상의 패턴을 선택해주세요.', 2500);
-                return;
-            }
-        }
-
-        // 3. 검증: 문제 유형 최소 1개 이상 선택
+        // 2. 검증: 문제 유형 최소 1개 이상 선택
         const quizTypesChecked = [
             document.querySelector('[name="quiz_type_checkbox"][value="subjective"]')?.checked,
             document.querySelector('[name="quiz_type_checkbox"][value="multiple_choice"]')?.checked
@@ -1046,14 +1305,14 @@ async function saveSettings() {
             return;
         }
 
-        // 4. 검증: 출제 순서 선택 확인
+        // 3. 검증: 출제 순서 선택 확인
         const selectedOrder = document.querySelector('[name="order_mode"]:checked');
         if (!selectedOrder) {
             showCustomAlert('출제 순서를 선택해주세요.');
             return;
         }
 
-        // 5. 검증: 주제(카테고리) 최소 1개 이상 선택
+        // 4. 검증: 주제(카테고리) 최소 1개 이상 선택
         const selectedCategories = Array.from(document.querySelectorAll('[name="category"]:checked')).map(cb => cb.value);
         if (selectedCategories.length === 0) {
             showCustomAlert('주제를 최소 1개 이상 선택해주세요.');
@@ -1064,16 +1323,14 @@ async function saveSettings() {
         const selectedFile = document.getElementById('jsonFileSelect')?.value;
 
         const settings = {
-            quiz_file: selectedFile || 'quiz_v2',
+            quiz_file: selectedFile || 'quiz',
             language1: document.getElementById('language1').value,
             language2: document.getElementById('language2').value,
             question_pattern: pattern,
             random_patterns: {
-                "A>B": document.getElementById('rand_pattern_A_B')?.checked || false,
-                "B>A": document.getElementById('rand_pattern_B_A')?.checked || false,
-                "img>A": document.getElementById('rand_pattern_img_A')?.checked || false,
-                "img>B": document.getElementById('rand_pattern_img_B')?.checked || false,
-                "img>A,B": document.getElementById('rand_pattern_img_AB')?.checked || false
+                // 무작위 선택 시 자동으로 A>B, B>A 둘 다 포함
+                "A>B": pattern === 'random',
+                "B>A": pattern === 'random'
             },
             quiz_type: "random",
             quiz_types: {
@@ -1096,6 +1353,9 @@ async function saveSettings() {
 
             // 폰트 설정도 저장
             await saveFontSettings();
+
+            // 시스템 설정도 저장
+            await saveSystemSettings();
 
             // 설정이 성공적으로 저장되면 페이지 새로고침
             // 새로고침 전에 플래그 설정

@@ -61,6 +61,10 @@ async def update_settings(settings: Dict) -> Dict:
         if "fonts" in existing_config:
             updated_config["fonts"] = existing_config["fonts"]
 
+        # 시스템 관련 설정 보존
+        if "system" in existing_config:
+            updated_config["system"] = existing_config["system"]
+
         # 설정 파일 저장
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(updated_config, f, ensure_ascii=False, indent=2)
@@ -253,6 +257,75 @@ async def update_font_config(font_config: Dict) -> Dict:
             "success": True,
             "message": "Font config updated successfully",
             "fonts": font_config
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/system")
+async def get_system_config() -> Dict:
+    """
+    시스템 설정 가져오기
+
+    Returns:
+        시스템 설정 (다음 문제 딜레이, 단축키 등)
+    """
+    config_path = Path("data/config.json")
+    system_config = {
+        "nextQuestionDelay": 1500,
+        "shortcuts": {
+            "tts": "S",
+            "llm": "L",
+            "reload": "R",
+            "settings": ",",
+            "exit": "Escape"
+        }
+    }
+
+    if config_path.exists():
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            if "system" in config:
+                system_config = config["system"]
+
+    return {
+        "success": True,
+        "system": system_config
+    }
+
+
+@router.post("/system")
+async def update_system_config(system_config: Dict) -> Dict:
+    """
+    시스템 설정 업데이트
+
+    Args:
+        system_config: 시스템 설정 값 (다음 문제 딜레이, 단축키 등)
+
+    Returns:
+        업데이트 성공 여부
+    """
+    try:
+        config_path = Path("data/config.json")
+
+        # 기존 설정 읽기
+        existing_config = {}
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                existing_config = json.load(f)
+
+        # 시스템 설정 업데이트
+        existing_config["system"] = system_config
+
+        # 파일 저장
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(existing_config, f, ensure_ascii=False, indent=2)
+
+        return {
+            "success": True,
+            "message": "System config updated successfully",
+            "system": system_config
         }
 
     except Exception as e:

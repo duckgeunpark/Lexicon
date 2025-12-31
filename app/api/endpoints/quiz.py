@@ -238,3 +238,51 @@ async def save_wrong_answer(wrong_item: Dict) -> Dict:
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/find-images")
+async def find_images(text: str) -> Dict:
+    """
+    주어진 텍스트와 일치하는 이미지 파일 찾기
+
+    Args:
+        text: 검색할 텍스트 (문제 또는 답)
+
+    Returns:
+        발견된 이미지 파일 경로 목록
+    """
+    try:
+        img_dir = Path("data") / "img"
+
+        if not img_dir.exists():
+            return {
+                "success": True,
+                "images": [],
+                "message": "이미지 폴더가 없습니다."
+            }
+
+        # 이미지 확장자 목록
+        image_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']
+
+        # 텍스트와 일치하는 이미지 파일 찾기
+        found_images = []
+
+        for img_file in img_dir.iterdir():
+            if img_file.is_file() and img_file.suffix.lower() in image_extensions:
+                # 파일명 (확장자 제외)
+                filename_without_ext = img_file.stem
+
+                # 텍스트와 파일명이 일치하는지 확인
+                if filename_without_ext.lower() == text.lower():
+                    # 상대 경로로 변환
+                    relative_path = f"/data/img/{img_file.name}"
+                    found_images.append(relative_path)
+
+        return {
+            "success": True,
+            "images": found_images,
+            "count": len(found_images)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
