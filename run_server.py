@@ -242,9 +242,9 @@ def start_webview():
     window = webview.create_window(
         title='Lexicon',
         url='http://127.0.0.1:8000',
-        width=1000,
-        height=800,
-        min_size=(800, 600),
+        width=800,
+        height=700,
+        min_size=(800, 700),
         resizable=True,
         fullscreen=False,
         background_color='#f5f5f5',

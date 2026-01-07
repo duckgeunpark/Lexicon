@@ -1039,26 +1039,6 @@ body {
     outline-offset: 2px;
     box-shadow: var(--focus-ring);
 }
-    font-size: var(--font-size-lg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all var(--duration-normal) var(--ease-standard);
-    box-shadow: var(--shadow-sm);
-    z-index: 10;
-}
-
-.llm-help-btn:hover {
-    background: var(--color-warning);
-    transform: translateY(-2px) scale(1.1);
-    box-shadow: var(--shadow-md);
-}
-
-.llm-help-btn:focus-visible {
-    outline: var(--focus-outline);
-    outline-offset: 2px;
-    box-shadow: var(--focus-ring);
-}
 .quiz-container {
     flex: 1 1 auto;
     display: flex;

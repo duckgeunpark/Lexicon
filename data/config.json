@@ -1,8 +1,8 @@
 {
-  "quiz_file": "quiz_st",
-  "language1": "ko",
-  "language2": "ko",
-  "question_pattern": "B>A",
+  "quiz_file": "quiz",
+  "language1": "ja",
+  "language2": "en",
+  "question_pattern": "A>B",
   "random_patterns": {
     "A>B": false,
     "B>A": false
@@ -14,7 +14,8 @@
   },
   "order_mode": "random",
   "selected_categories": [
-    "4과목_네트워크"
+    "hiragana",
+    "katakana"
   ],
   "llm": {
     "model": "claude-3-sonnet",
@@ -34,9 +35,9 @@
   },
   "fonts": {
     "fontFamily": "'Noto Sans KR', sans-serif",
-    "categorySize": 12,
-    "questionSize": 24,
-    "answerSize": 14
+    "categorySize": 32,
+    "questionSize": 120,
+    "answerSize": 32
   },
   "system": {
     "nextQuestionDelay": 500,
