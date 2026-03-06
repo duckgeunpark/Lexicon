@@ -12,19 +12,30 @@ class LLMService:
     """LLM 통합 서비스"""
 
     def __init__(self, config_path: Path = None):
-        """
-        Args:
-            config_path: config.json 파일 경로
-        """
         if config_path is None:
-            config_path = Path(__file__).parent.parent.parent / "data" / "config.json"
+            from ..core import paths as app_paths
+            config_path = app_paths.get_config_path()
 
         self.config_path = config_path
         self._provider: Optional[LLMProvider] = None
         self._prompt_manager: Optional[PromptManager] = None
 
+    def _get_config_manager(self):
+        """ConfigManager lazy access"""
+        try:
+            from ..core.config import ConfigManager
+            return ConfigManager.get_instance()
+        except Exception:
+            return None
+
     def _load_config(self) -> Dict[str, Any]:
-        """설정 로드"""
+        """설정 로드 (ConfigManager 우선)"""
+        cm = self._get_config_manager()
+        if cm is not None:
+            config = cm.get_all()
+            if config:
+                return config
+
         if not self.config_path.exists():
             raise FileNotFoundError(f"설정 파일을 찾을 수 없습니다: {self.config_path}")
 
@@ -126,38 +137,39 @@ class LLMService:
             }
 
     def save_config(self, model: str, api_key: str, prompts: Dict[str, Any] = None):
-        """
-        LLM 설정 저장
+        """LLM 설정 저장"""
+        cm = self._get_config_manager()
 
-        Args:
-            model: LLM 모델명
-            api_key: API 키
-            prompts: 프롬프트 설정 (선택)
-        """
-        # 기존 설정 로드
-        if self.config_path.exists():
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
+        if cm is not None:
+            cm.set_section("llm", {"model": model, "api_key": api_key})
+            if prompts is not None:
+                cm.set_section("llm_prompts", prompts)
         else:
-            config = {}
+            # Fallback: 직접 파일 쓰기
+            if self.config_path.exists():
+                with open(self.config_path, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+            else:
+                config = {}
 
-        # LLM 기본 설정 업데이트
-        config["llm"] = {
-            "model": model,
-            "api_key": api_key
-        }
+            config["llm"] = {"model": model, "api_key": api_key}
+            if prompts is not None:
+                config["llm_prompts"] = prompts
 
-        # 프롬프트 설정 업데이트
-        if prompts is not None:
-            config["llm_prompts"] = prompts
+            self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
 
-        # 파일 저장
-        self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.config_path, "w", encoding="utf-8") as f:
-            json.dump(config, f, ensure_ascii=False, indent=2)
-
-        # 캐시 초기화
         self.reset_cache()
+
+    async def chat_stream(self, question: str, context: Dict[str, Any] = None):
+        """스트리밍 LLM 응답 생성"""
+        from typing import AsyncGenerator
+        provider = self._get_provider()
+        prompt_manager = self._get_prompt_manager()
+        messages = prompt_manager.build_messages(question, context)
+        async for chunk in provider.chat_stream(messages):
+            yield chunk
 
     @staticmethod
     def get_available_personas() -> Dict[str, Dict[str, str]]:

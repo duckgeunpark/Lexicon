@@ -1,266 +1,258 @@
-# 📖 Lexicon
+# Lexicon
 
-**Lexicon**은 언어 학습을 위한 인터랙티브 퀴즈 애플리케이션입니다. 커스터마이징 가능한 설정, AI 학습 도우미, 실시간 통계 추적 등의 기능을 제공합니다.
+**언어 학습 퀴즈 데스크톱 애플리케이션**
+
+JSON 기반 퀴즈 데이터로 어휘를 학습하고, AI 도우미와 대화하며 복습할 수 있는 크로스플랫폼 데스크톱 앱입니다.
 
 ![Lexicon](static/icon.ico)
 
-## ✨ 주요 기능
+## 시연
 
-### 📝 다양한 퀴즈 유형
-- **객관식**: 4지선다형 문제로 빠른 학습
-- **주관식**: 직접 입력하여 정확한 암기 확인
-- **이미지 퀴즈**: 시각적 학습 지원
+<video src="https://github.com/user-attachments/assets/f7f654a9-45f9-4bd5-84ec-61d0b9ce3f7d"
+       controls muted playsinline loop>
+  브라우저에서 재생이 안 되면 <a href="https://github.com/user-attachments/assets/f7f654a9-45f9-4bd5-84ec-61d0b9ce3f7d">여기</a>를 클릭하세요.
+</video>
 
-### 🤖 AI 학습 도우미
-- LLM 기반 실시간 질문 응답
-- 맞춤형 페르소나 설정
-- 채팅 기록 관리
+---
 
-### 📊 실시간 통계
-- 정답률 추적
-- 총 문제 수, 정답/오답 개수 표시
-- 헤더에서 한눈에 확인
+## 주요 기능
 
-### 🔊 TTS (음성 읽기)
-- **더블클릭 읽기**: 문제 텍스트를 더블클릭하여 음성으로 듣기
-- **네온 효과**: 읽는 동안 시각적 피드백
-- **세부 설정**: 속도, 음높이, 볼륨 조정 가능
-- **다국어 지원**: 자동 언어 감지 및 적절한 음성 선택
-
-### ⚙️ 커스터마이징
-- **언어 선택**: 다양한 언어 조합 (한국어, 일본어, 영어, 중국어 등)
-- **출제 패턴**: A→B, B→A, 이미지→텍스트 등
+### 퀴즈 시스템
+- **객관식 / 주관식** 자동 출제
+- **출제 패턴**: A→B, B→A, 이미지→텍스트 등 조합
 - **출제 순서**: 무작위, 정순, 역순
-- **주제 필터링**: 원하는 카테고리만 선택
-- **폰트 설정**: 12가지 폰트 선택, 크기 조정 (대주제/문제/답)
+- **카테고리 필터링**: 원하는 주제만 선택하여 학습
+- **오답 노트 자동 저장** 및 오답 복습 모드
 
-### 📁 유연한 데이터 관리
-- JSON 파일 기반 퀴즈 데이터
-- 여러 파일 간 쉬운 전환
-- 오답 노트 자동 저장
+### AI 학습 도우미 (LLM)
+- OpenAI, Anthropic, Google 멀티 프로바이더 지원
+- SSE 스트리밍 응답으로 실시간 타이핑 효과
+- 5종 페르소나 프리셋 (친절한 튜터, 엄격한 교수, 원어민 친구 등)
+- 현재 풀고 있는 문제 컨텍스트를 자동 전달
 
-### 🎨 현대적인 UI/UX
-- 다크/라이트 모드 자동 감지
-- 반응형 디자인 (모바일 지원)
-- 부드러운 애니메이션
+### 학습 관리
+- 실시간 정답률 통계 (헤더 상시 표시)
+- 학습 진도 저장/복원 (서버 측 persist)
+- 세션 누적 통계 (페이지 이탈 시 자동 저장)
 
+### TTS 음성 읽기
+- Web Speech API 기반 다국어 TTS
+- 속도, 음높이, 볼륨 세부 조정
+- 사운드 웨이브 애니메이션 + 진행 표시바
 
-## 🚀 시작하기
+### 커스터마이징
+- **12종 한글/일본어 폰트** 선택, 대주제/문제/답 크기 개별 조정
+- **다크/라이트 테마** 수동 전환 (시스템 설정 연동 + 수동 토글)
+- **키보드 단축키**: TTS(S), LLM(L), 리로드(R), 설정(?) 등
 
-### 필수 요구사항
-- Python 3.8+
-- Node.js (선택사항, 프론트엔드 개발 시)
+---
 
-### 설치
+## 기술 스택
 
-1. **저장소 클론**
-```bash
-git clone https://github.com/duckgeunpark/Lexicon.git
-cd Lexicon
+| 영역 | 기술 |
+|------|------|
+| **Backend** | FastAPI, Uvicorn, Pydantic v2 |
+| **Frontend** | Vanilla JS, CSS Variables, Web Speech API |
+| **Desktop** | PyWebView (네이티브 윈도우 래핑) |
+| **LLM** | httpx AsyncClient, SSE Streaming |
+| **빌드** | PyInstaller (단일 실행 파일) |
+
+---
+
+## 아키텍처
+
+```
+┌─────────────────────────────────────────────────┐
+│  PyWebView (Desktop Window)                     │
+│  ┌───────────────────────────────────────────┐  │
+│  │  Frontend (Vanilla JS + CSS)              │  │
+│  │  - Quiz UI, Settings Modal, LLM Chat      │  │
+│  │  - TTS, Theme, Progress, Stats            │  │
+│  └──────────────┬────────────────────────────┘  │
+│                 │ HTTP (localhost:8000)         │
+│  ┌──────────────▼────────────────────────────┐  │
+│  │  FastAPI Server                           │  │
+│  │  ├─ /api/quiz/*      퀴즈 엔진             │  │
+│  │  ├─ /api/settings/*  설정 관리             │  │
+│  │  └─ /api/llm/*       AI 채팅 + 스트리밍     │  │
+│  │                                           │  │
+│  │  Core Layer                               │  │
+│  │  ├─ ConfigManager    (Thread-safe 싱글턴)  │  │
+│  │  ├─ QuizDataLoader   (문제 풀 관리)        │  │
+│  │  └─ LLMService       (멀티 프로바이더)     │  │
+│  └──────────────┬────────────────────────────┘  │
+│                 │                                │
+│  ┌──────────────▼────────────────────────────┐  │
+│  │  data/                                    │  │
+│  │  ├─ config.json       설정 (모든 상태)     │  │
+│  │  ├─ quiz.json         퀴즈 데이터          │  │
+│  │  ├─ quiz_wrong.json   오답 노트            │  │
+│  │  └─ img/              이미지 문제용         │  │
+│  └───────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────┘
 ```
 
-2. **가상환경 생성 및 활성화**
-```bash
-python -m venv venv
+---
 
-# Windows
-venv\Scripts\activate
-
-# macOS/Linux
-source venv/bin/activate
-```
-
-3. **의존성 설치**
-```bash
-pip install -r requirements.txt
-```
-
-### 실행
-
-#### 웹 서버 모드
-```bash
-python run_server.py
-```
-브라우저에서 `http://localhost:8000` 접속
-
-#### 데스크톱 앱 모드
-```bash
-python run_server.py --desktop
-```
-PyWebView 창이 자동으로 열립니다.
-
-### 빌드 (실행 파일 생성)
-```bash
-python build.py
-```
-`dist/` 폴더에 실행 파일이 생성됩니다.
-
-## 📂 프로젝트 구조
+## 프로젝트 구조
 
 ```
 Lexicon/
-├── app/                    # FastAPI 애플리케이션
-│   ├── main.py            # API 라우터
-│   └── models.py          # 데이터 모델
-├── data/                   # 퀴즈 데이터
-│   ├── config.json        # 설정 파일
-│   ├── quiz.json          # 기본 퀴즈 데이터
-│   └── quiz_wrong.json    # 오답 노트
-├── static/                 # 프론트엔드 파일
-│   ├── index.html         # 메인 HTML
-│   ├── app.js             # JavaScript 로직
-│   ├── styles.css         # 스타일시트
-│   └── icon.ico           # 앱 아이콘
-├── run_server.py          # 서버 실행 스크립트
-├── build.py               # PyInstaller 빌드 스크립트
-├── requirements.txt       # Python 의존성
-└── README.md              # 이 문서
+├── app/
+│   ├── api/endpoints/
+│   │   ├── quiz.py          # 퀴즈 출제, 채점, 오답, 진도, 통계 API
+│   │   ├── settings.py      # 설정 CRUD API (TTS, 폰트, 시스템)
+│   │   └── llm.py           # LLM 설정, 채팅, 스트리밍 API
+│   ├── core/
+│   │   ├── config.py        # ConfigManager (Thread-safe 싱글턴)
+│   │   ├── dependencies.py  # FastAPI DI (Depends)
+│   │   └── exceptions.py    # 커스텀 HTTP 예외
+│   ├── llm/
+│   │   ├── providers.py     # OpenAI / Anthropic / Google 프로바이더
+│   │   ├── service.py       # LLM 통합 서비스
+│   │   └── prompts.py       # 페르소나 & 프롬프트 관리
+│   ├── models/
+│   │   ├── requests.py      # Pydantic 요청 모델
+│   │   └── responses.py     # Pydantic 응답 모델
+│   └── utils/
+│       └── data_loader.py   # 퀴즈 데이터 로더 (Thread-safe)
+├── static/
+│   ├── index.html           # SPA 메인 페이지
+│   ├── app.js               # 프론트엔드 로직 (2,100+ LOC)
+│   └── styles.css           # 스타일 + 다크/라이트 테마 (2,900+ LOC)
+├── data/
+│   ├── config.json          # 앱 설정
+│   ├── quiz.json            # 퀴즈 데이터
+│   └── quiz_wrong.json      # 오답 노트
+├── run_server.py            # FastAPI + PyWebView 엔트리포인트
+├── build.py                 # PyInstaller 빌드 스크립트
+└── requirements.txt
 ```
 
-## ⚙️ 설정 파일 구조
+---
 
-`data/config.json`은 모든 앱 설정을 저장합니다:
+## 설계 포인트
+
+### 보안
+- **Path Traversal 방어**: 파일명 정규식 검증 (`_sanitize_filename`)
+- **Pydantic 요청 검증**: 모든 POST 엔드포인트에 타입 모델 적용
+- **API 키 마스킹**: 설정 조회 시 `sk-12...ab34` 형태로 마스킹
+- **CORS 제한**: `localhost:8000`만 허용, GET/POST만 허용
+
+### 동시성 & 안정성
+- **Thread-safe ConfigManager**: `threading.Lock` 기반 싱글턴, 모든 읽기/쓰기 동기화
+- **Thread-safe QuizDataLoader**: 문제 풀 재구성, 문제 생성에 Lock 적용
+- **UUID 기반 문제 ID**: `random.randint` 대신 `uuid4().hex[:8]`으로 충돌 방지
+
+### 성능
+- **httpx AsyncClient 공유**: LLM API 호출 시 커넥션 풀 재사용
+- **선택적 풀 재구성**: 카테고리/순서 변경 시에만 `rebuild_question_pool()` 호출
+- **SSE 스트리밍**: LLM 응답을 청크 단위로 전송하여 체감 응답 속도 개선
+
+### 확장성
+- **멀티 프로바이더 LLM**: `LLMProvider` 추상 클래스 → OpenAI, Anthropic, Google 구현체
+- **JSON 기반 퀴즈 데이터**: 파일만 추가하면 새 퀴즈셋 즉시 사용
+- **ConfigManager 중앙화**: 모든 모듈이 단일 설정 소스 참조
+
+---
+
+## 시작하기
+
+### 요구사항
+- Python 3.8+
+
+### 설치 및 실행
+
+```bash
+# 클론
+git clone https://github.com/duckgeunpark/Lexicon.git
+cd Lexicon
+
+# 가상환경
+python -m venv venv
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # macOS/Linux
+
+# 의존성 설치
+pip install -r requirements.txt
+
+# 실행
+python run_server.py
+```
+
+### 실행 파일 빌드
+
+```bash
+python build.py
+# → dist/ 폴더에 Lexicon.exe 생성
+```
+
+---
+
+## 퀴즈 데이터 형식
+
+`data/quiz.json`:
+
+```json
+{
+  "카테고리명": {
+    "문제": "답",
+    "apple": "사과",
+    "学校": "がっこう"
+  }
+}
+```
+
+- 카테고리를 자유롭게 추가/삭제
+- `data/img/` 폴더에 이미지를 넣으면 이미지→텍스트 문제 자동 생성
+- `quiz_*.json` 패턴으로 여러 퀴즈 파일을 만들고 설정에서 전환 가능
+
+---
+
+## 설정 구조
 
 ```json
 {
   "quiz_file": "quiz",
   "language1": "ja",
-  "language2": "ko",
+  "language2": "en",
   "question_pattern": "A>B",
   "order_mode": "random",
-  "selected_categories": ["학교", "일상"],
-
-  "tts": {
-    "rate": 1.0,
-    "pitch": 1.0,
-    "volume": 1.0,
-    "minNeonDuration": 500
-  },
-
-  "fonts": {
-    "fontFamily": "'Gothic A1', sans-serif",
-    "categorySize": 22,
-    "questionSize": 72,
-    "answerSize": 23
-  },
-
-  "llm": {
-    "model": "claude-3-sonnet",
-    "api_key": "your-api-key"
-  }
+  "selected_categories": ["hiragana", "katakana"],
+  "tts": { "rate": 1.0, "pitch": 1.0, "volume": 1.0 },
+  "fonts": { "fontFamily": "'Noto Sans KR'", "questionSize": 72 },
+  "llm": { "model": "gpt-4o-mini", "api_key": "..." },
+  "llm_prompts": { "persona": "friendly_tutor", "temperature": 0.7 },
+  "system": { "nextQuestionDelay": 500, "shortcuts": { "tts": "S" } }
 }
 ```
-
-## 🎮 사용 방법
-
-### 1. 퀴즈 데이터 준비
-`data/quiz.json` 형식:
-```json
-{
-  "카테고리명": [
-    {
-      "ko": "한국어 텍스트",
-      "ja": "日本語テキスト",
-      "en": "English text",
-      "image": "/static/images/example.png"
-    }
-  ]
-}
-```
-
-### 2. 설정 구성
-- 우측 상단 ⚙️ 버튼 클릭
-- **퀴즈 설정**: 언어, 출제 패턴, 문제 유형 선택
-- **폰트 설정**: 폰트 종류 선택 (12가지), 대주제/문제/답 크기 조정
-- **TTS 설정**: 읽기 속도, 음높이, 볼륨, 네온 효과 지속시간 조정
-- **JSON 파일**: 여러 퀴즈 파일 간 전환 지원 (quiz로 시작하는 json파일)
-- 저장 후 자동 새로고침
-
-### 3. LLM 설정 (선택사항)
-- 우측 하단 상태 버튼 클릭
-- LLM 모델 및 API 키 입력
-- 페르소나, Temperature, Max Tokens 설정
-- 저장 및 연결 테스트
-
-### 4. 퀴즈 풀기
-- 문제가 자동으로 로드됩니다 
-- **객관식**: 보기 클릭
-- **주관식**: 답 입력 후 → 버튼 클릭
-- **음성 듣기**: 문제 텍스트를 더블클릭하여 TTS로 발음 확인
-- **AI 도우미**: 💡 버튼으로 질문 가능 (LLM 설정 필요)
-
-
-### 5. 미완성
-- 이미지로드 및 퀴즈 활용
-- LLM 연결 및 프롬프트, 모델 등 전반적인 부분
-- 문제 사운드 출력 (특정언어 안나오는 현상, 브라우저 실행시에만 나오는현상)
-- 직관적인 피드백 시스템 (O/X 표시)
-
-### 6. 개발예정
-- 언어 설정기능(설정, LLM 등)
-- Frontend 리펙토링
-- 최적화
-
-## 🛠️ 기술 스택
-
-### 백엔드
-- **FastAPI**: 현대적이고 빠른 웹 프레임워크
-- **Uvicorn**: ASGI 서버
-- **Pydantic**: 데이터 검증
-- **HTTPX**: 비동기 HTTP 클라이언트 (LLM API)
-
-### 프론트엔드
-- **Vanilla JavaScript**: 프레임워크 없이 순수 JS
-- **Web Speech API**: 브라우저 내장 TTS 기능
-- **Google Fonts**: 다양한 폰트 지원
-- **CSS Variables**: 다이나믹 테마
-- **Perplexity Design System**: 모던한 UI 디자인
-
-### 데스크톱
-- **PyWebView**: 크로스플랫폼 데스크톱 앱
-- **PyInstaller**: 실행 파일 빌드
-
-## 🔧 개발
-
-### 코드 스타일
-- Python: PEP 8
-- JavaScript: ESLint 권장 설정
-- CSS: BEM 명명 규칙
-
-### 디버깅
-개발자 도구(F12)에서 콘솔 로그 확인:
-```javascript
-console.log('🚀 Lexicon App 초기화 중...');
-```
-## 시연
-아래 영상에서 Lexicon App의 기본 동작을 확인할 수 있습니다.  
-<video src="https://github.com/user-attachments/assets/f7f654a9-45f9-4bd5-84ec-61d0b9ce3f7d"
-       controls
-       muted
-       playsinline
-       loop>
-  브라우저에서 동영상을 재생할 수 없는 경우,
-  이 [링크](https://github.com/user-attachments/assets/f7f654a9-45f9-4bd5-84ec-61d0b9ce3f7d)를 클릭해 시청하세요.
-</video>
-
-## 📝 라이선스
-
-이 프로젝트는 MIT 라이선스 하에 배포됩니다.
-
-## 🤝 기여
-
-버그 리포트, 기능 제안, Pull Request를 환영합니다!
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📧 문의
-
-프로젝트 링크: [https://github.com/duckgeunpark/Lexicon](https://github.com/duckgeunpark/Lexicon)
 
 ---
 
-**Made with ❤️ by DuckgeunPark**
+## API 엔드포인트
+
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| GET | `/api/quiz/next` | 다음 문제 출제 |
+| POST | `/api/quiz/check-answer` | 답안 채점 |
+| POST | `/api/quiz/save-wrong-answer` | 오답 저장 |
+| GET | `/api/quiz/wrong-answers` | 오답 목록 조회 |
+| POST | `/api/quiz/review-wrong` | 오답 복습 문제 출제 |
+| GET/POST | `/api/quiz/progress` | 학습 진도 조회/저장 |
+| GET/POST | `/api/quiz/session-stats` | 세션 통계 조회/저장 |
+| GET/POST | `/api/settings/` | 전체 설정 조회/저장 |
+| GET/POST | `/api/settings/tts` | TTS 설정 |
+| GET/POST | `/api/settings/fonts` | 폰트 설정 |
+| POST | `/api/llm/chat` | LLM 채팅 |
+| POST | `/api/llm/chat/stream` | LLM 스트리밍 (SSE) |
+| POST | `/api/llm/test` | LLM 연결 테스트 |
+
+---
+
+## 라이선스
+
+MIT License
+
+---
+
+**Made with by DuckgeunPark**

@@ -10,6 +10,8 @@ let stats = {
 };
 let originalQuizFile = null;  // 설정 열 때의 원래 파일 저장
 let originalFontSettings = null;  // 설정 열 때의 원래 폰트 설정 저장
+let isReviewMode = false;  // 오답 복습 모드
+let sessionStartTime = Date.now();  // 세션 시작 시간
 
 // 시스템 설정
 let systemSettings = {
@@ -92,7 +94,10 @@ const elements = {
     // TTS 재생 중 표시
     ttsPlayingIndicator: document.getElementById('ttsPlayingIndicator'),
     ttsProgressBar: document.getElementById('ttsProgressBar'),
-    speakerBtn: document.getElementById('speakerBtn')
+    speakerBtn: document.getElementById('speakerBtn'),
+    // Phase 6: 새 버튼
+    reviewWrongBtn: document.getElementById('reviewWrongBtn'),
+    themeToggleBtn: document.getElementById('themeToggleBtn')
 };
 
 // ============ 초기화 ============
@@ -121,6 +126,15 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('✅ 설정이 저장되고 새로고침되었습니다');
         sessionStorage.removeItem('settings_saved');
     }
+
+    // Phase 6: 테마 복원
+    restoreTheme();
+
+    // Phase 6: 진도 복원
+    loadProgress();
+
+    // Phase 6: 세션 종료 시 통계 저장
+    window.addEventListener('beforeunload', saveSessionOnExit);
 });
 
 // ============ 이벤트 리스너 ============
@@ -194,6 +208,16 @@ function initEventListeners() {
 
     // 시스템 설정 이벤트 리스너
     elements.nextQuestionDelay.addEventListener('input', updateNextQuestionDelayValue);
+
+    // Phase 6: 테마 토글
+    if (elements.themeToggleBtn) {
+        elements.themeToggleBtn.addEventListener('click', toggleTheme);
+    }
+
+    // Phase 6: 오답 복습
+    if (elements.reviewWrongBtn) {
+        elements.reviewWrongBtn.addEventListener('click', toggleReviewMode);
+    }
 }
 
 // ============ API 호출 ============
@@ -458,16 +482,19 @@ async function selectAnswer(option, index) {
     const buttons = elements.optionsGrid.querySelectorAll('.option-button');
     buttons.forEach(btn => btn.disabled = true);
 
+    // 서버에서 is_correct를 보내지 않으므로, answer 필드로 정답 여부 판별
+    const isCorrect = option.text === currentQuestion.answer;
+
     // 정답 표시
-    buttons[index].classList.add(option.is_correct ? 'correct' : 'incorrect');
+    buttons[index].classList.add(isCorrect ? 'correct' : 'incorrect');
 
     // O/X 피드백 표시
-    showAnswerFeedback(option.is_correct);
+    showAnswerFeedback(isCorrect);
 
-    if (!option.is_correct) {
+    if (!isCorrect) {
         // 오답인 경우 정답 표시
         buttons.forEach((btn, i) => {
-            if (currentQuestion.options[i].is_correct) {
+            if (currentQuestion.options[i].text === currentQuestion.answer) {
                 btn.classList.add('correct');
             }
         });
@@ -477,7 +504,7 @@ async function selectAnswer(option, index) {
     }
 
     // 통계 업데이트
-    updateStats(option.is_correct);
+    updateStats(isCorrect);
 
     // 다음 문제로 (시스템 설정의 딜레이 적용)
     setTimeout(loadNextQuestion, systemSettings.nextQuestionDelay);
@@ -569,12 +596,12 @@ function updateStats(isCorrect) {
         stats.incorrect++;
     }
 
-    const accuracy = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
+    updateStatsDisplay();
 
-    document.getElementById('headerStatTotal').textContent = stats.total;
-    document.getElementById('headerStatCorrect').textContent = stats.correct;
-    document.getElementById('headerStatIncorrect').textContent = stats.incorrect;
-    document.getElementById('headerStatAccuracy').textContent = `${accuracy}%`;
+    // Phase 6: 자동 진도 저장 (10문제마다)
+    if (stats.total % 10 === 0) {
+        saveProgress();
+    }
 }
 
 // ============ 오답 저장 ============
@@ -1871,88 +1898,227 @@ function scrollChatToBottom() {
 
 async function sendLlmQuestion() {
     /**
-     * LLM에게 질문 전송 및 답변 받기 (채팅 방식)
+     * LLM에게 질문 전송 및 답변 받기 (SSE 스트리밍)
      */
     const question = elements.llmQuestionInput.value.trim();
+    if (!question) return;
 
-    // 유효성 검사
-    if (!question) {
-        return;  // 빈 질문은 조용히 무시
-    }
-
-    // 환영 메시지 제거 (첫 번째 질문 시)
     const welcomeMessage = elements.llmChatMessages.querySelector('.llm-welcome-message');
-    if (welcomeMessage) {
-        welcomeMessage.remove();
-    }
+    if (welcomeMessage) welcomeMessage.remove();
 
-    // 사용자 메시지 추가
     const userMessage = createChatMessage(question, true);
     elements.llmChatMessages.appendChild(userMessage);
 
-    // 입력 필드 초기화
     elements.llmQuestionInput.value = '';
-    elements.llmQuestionInput.style.height = 'auto';  // 높이 초기화
-
-    // 스크롤 맨 아래로
+    elements.llmQuestionInput.style.height = 'auto';
     scrollChatToBottom();
 
-    // 타이핑 인디케이터 표시
     const typingIndicator = createTypingIndicator();
     elements.llmChatMessages.appendChild(typingIndicator);
     scrollChatToBottom();
 
-    // 버튼 비활성화
     elements.llmSendBtn.disabled = true;
     elements.llmQuestionInput.disabled = true;
 
     try {
-        // 현재 문제 컨텍스트 구성
         const context = currentQuestion ? {
             category: currentQuestion.category,
             question: currentQuestion.question,
             answer: currentQuestion.answer
         } : null;
 
-        // LLM API 호출
-        const response = await apiCall('/llm/chat', {
+        // SSE 스트리밍 시도
+        const response = await fetch(`${API_BASE}/llm/chat/stream`, {
             method: 'POST',
-            body: JSON.stringify({
-                question,
-                context
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question, context })
         });
 
-        // 타이핑 인디케이터 제거
         typingIndicator.remove();
 
-        if (response.success) {
-            // AI 응답 메시지 추가
-            const assistantMessage = createChatMessage(response.response, false);
+        if (response.ok && response.headers.get('content-type')?.includes('text/event-stream')) {
+            // 스트리밍 응답
+            const assistantMessage = createChatMessage('', false);
             elements.llmChatMessages.appendChild(assistantMessage);
+            const textEl = assistantMessage.querySelector('.llm-message-text') || assistantMessage.querySelector('p') || assistantMessage;
+            let fullText = '';
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.text) {
+                                fullText += data.text;
+                                textEl.textContent = fullText;
+                                scrollChatToBottom();
+                            }
+                            if (data.error) {
+                                textEl.textContent = `오류: ${data.error}`;
+                            }
+                        } catch (e) {}
+                    }
+                }
+            }
         } else {
-            // 에러 메시지 추가
-            const errorMessage = createChatMessage(`오류: ${response.error}`, false);
-            elements.llmChatMessages.appendChild(errorMessage);
+            // Fallback: non-streaming
+            const data = await response.json();
+            if (data.success) {
+                const assistantMessage = createChatMessage(data.response, false);
+                elements.llmChatMessages.appendChild(assistantMessage);
+            } else {
+                const errorMessage = createChatMessage(`오류: ${data.error}`, false);
+                elements.llmChatMessages.appendChild(errorMessage);
+            }
         }
     } catch (error) {
-        // 타이핑 인디케이터 제거
         typingIndicator.remove();
-
-        // 에러 메시지 추가
         const errorMessage = createChatMessage(`요청 실패: ${error.message}`, false);
         elements.llmChatMessages.appendChild(errorMessage);
     } finally {
-        // 버튼 활성화
         elements.llmSendBtn.disabled = false;
         elements.llmQuestionInput.disabled = false;
-
-        // 스크롤 맨 아래로
         scrollChatToBottom();
-
-        // 입력 필드에 포커스
         elements.llmQuestionInput.focus();
     }
 }
+
+
+// ============ Phase 6: 테마 전환 ============
+function toggleTheme() {
+    const html = document.documentElement;
+    const current = html.getAttribute('data-theme');
+    let newTheme;
+
+    if (current === 'dark') {
+        newTheme = 'light';
+    } else if (current === 'light') {
+        newTheme = 'dark';
+    } else {
+        // Auto mode → toggle based on system preference
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        newTheme = prefersDark ? 'light' : 'dark';
+    }
+
+    html.setAttribute('data-theme', newTheme);
+    localStorage.setItem('lexicon-theme', newTheme);
+    showToast(`테마: ${newTheme === 'dark' ? '다크' : '라이트'} 모드`);
+}
+
+function restoreTheme() {
+    const saved = localStorage.getItem('lexicon-theme');
+    if (saved) {
+        document.documentElement.setAttribute('data-theme', saved);
+    }
+}
+
+
+// ============ Phase 6: 학습 진도 저장/복원 ============
+async function loadProgress() {
+    try {
+        const response = await apiCall('/quiz/progress');
+        if (response.success && response.progress) {
+            const p = response.progress;
+            stats.total = p.total || 0;
+            stats.correct = p.correct || 0;
+            stats.incorrect = p.incorrect || 0;
+            updateStatsDisplay();
+        }
+    } catch (e) {
+        // 진도 복원 실패는 무시
+    }
+}
+
+async function saveProgress() {
+    try {
+        await apiCall('/quiz/progress', {
+            method: 'POST',
+            body: JSON.stringify({
+                total: stats.total,
+                correct: stats.correct,
+                incorrect: stats.incorrect
+            })
+        });
+    } catch (e) {
+        // 진도 저장 실패는 무시
+    }
+}
+
+function updateStatsDisplay() {
+    const accuracy = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
+    document.getElementById('headerStatTotal').textContent = stats.total;
+    document.getElementById('headerStatCorrect').textContent = stats.correct;
+    document.getElementById('headerStatIncorrect').textContent = stats.incorrect;
+    document.getElementById('headerStatAccuracy').textContent = accuracy + '%';
+}
+
+
+// ============ Phase 6: 오답 복습 모드 ============
+async function toggleReviewMode() {
+    if (isReviewMode) {
+        // 복습 모드 해제 → 원래 데이터로 복원
+        isReviewMode = false;
+        elements.reviewWrongBtn.style.opacity = '1';
+        await apiCall('/quiz/reload', { method: 'POST' });
+        showToast('일반 모드로 돌아갑니다');
+        loadNextQuestion();
+        return;
+    }
+
+    try {
+        const response = await apiCall('/quiz/review-wrong', { method: 'POST' });
+        if (response.success) {
+            isReviewMode = true;
+            elements.reviewWrongBtn.style.opacity = '0.5';
+            showToast(response.message);
+            loadNextQuestion();
+        } else {
+            showToast(response.message || '오답 데이터가 없습니다');
+        }
+    } catch (e) {
+        showToast('오답 복습 모드 시작 실패');
+    }
+}
+
+
+// ============ Phase 6: 세션 통계 저장 ============
+async function saveSessionOnExit() {
+    if (stats.total === 0) return;
+
+    const duration = (Date.now() - sessionStartTime) / 1000;
+    const accuracy = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) / 100 : 0;
+
+    // 진도 저장
+    try {
+        navigator.sendBeacon(`${API_BASE}/quiz/progress`, JSON.stringify({
+            total: stats.total,
+            correct: stats.correct,
+            incorrect: stats.incorrect
+        }));
+    } catch (e) {}
+
+    // 세션 통계 저장
+    try {
+        navigator.sendBeacon(`${API_BASE}/quiz/session-stats`, JSON.stringify({
+            total: stats.total,
+            correct: stats.correct,
+            incorrect: stats.incorrect,
+            accuracy: accuracy,
+            duration_seconds: duration
+        }));
+    } catch (e) {}
+}
+
 
 console.log('✅ Lexicon App 로드 완료');

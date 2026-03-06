@@ -49,3 +49,6 @@ logs/
 .claude/
 .build
 .dist
+
+# Sensitive config (contains API keys)
+data/config.json

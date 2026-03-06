@@ -35,9 +35,9 @@
   },
   "fonts": {
     "fontFamily": "'Noto Sans KR', sans-serif",
-    "categorySize": 32,
-    "questionSize": 120,
-    "answerSize": 32
+    "categorySize": 17,
+    "questionSize": 94,
+    "answerSize": 27
   },
   "system": {
     "nextQuestionDelay": 500,

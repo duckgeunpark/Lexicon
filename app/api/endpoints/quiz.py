@@ -1,10 +1,46 @@
-from fastapi import APIRouter, HTTPException
-from typing import Dict
-from ...utils.data_loader import quiz_loader
+import re
 import json
 from pathlib import Path
+from fastapi import APIRouter, HTTPException
+from typing import Dict, Optional, List
+from ...utils.data_loader import quiz_loader
+from ...models.requests import (
+    CheckAnswerRequest, SaveWrongAnswerRequest, ProgressData, SessionStats
+)
+
 
 router = APIRouter()
+
+
+# ============ 보안: 파일명 검증 ============
+
+def _sanitize_filename(filename: str) -> str:
+    """파일명에서 안전하지 않은 문자를 제거하고 경로 탐색을 방지
+    비라틴 문자(한글, 일본어 등)도 허용
+    """
+    if not filename:
+        return filename
+    # 경로 구분자 제거
+    filename = filename.replace('\\', '').replace('/', '')
+    # 안전한 문자만 허용 (알파벳, 숫자, 하이픈, 언더스코어, 마침표, 유니코드 문자)
+    filename = re.sub(r'[^\w\-.]', '', filename, flags=re.UNICODE)
+    # 상위 디렉토리 이동 방지
+    filename = filename.lstrip('.')
+    return filename
+
+
+def _get_data_dir() -> Path:
+    """절대경로 기반 data 디렉토리 반환"""
+    return quiz_loader._resolve_data_dir()
+
+
+# ============ 답안 정규화 ============
+
+def normalize_answer(text: str) -> str:
+    """답안 정규화: 소문자 변환, 공백 정리"""
+    text = text.lower().strip()
+    text = re.sub(r'\s+', ' ', text)
+    return text
 
 
 @router.get("/next")
@@ -42,6 +78,8 @@ async def reload_data(filename: str = None) -> Dict:
         성공 여부 및 로드된 데이터 정보
     """
     try:
+        if filename:
+            filename = _sanitize_filename(filename)
         quiz_loader.reload(filename)
 
         return {
@@ -93,6 +131,9 @@ async def load_file(filename: str) -> Dict:
         성공 여부 및 로드된 데이터 정보
     """
     try:
+        filename = _sanitize_filename(filename)
+        if not filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
         quiz_loader.reload(filename)
 
         # 언어 자동 감지
@@ -134,24 +175,11 @@ async def get_stats() -> Dict:
 
 
 @router.post("/check-answer")
-async def check_answer(answer_data: Dict) -> Dict:
-    """
-    답안 확인 (주관식용)
-
-    Args:
-        answer_data: {
-            "user_answer": 사용자 답변,
-            "correct_answer": 정답,
-            "question": 문제 (선택),
-            "category": 카테고리 (선택)
-        }
-
-    Returns:
-        정답 여부 및 정답
-    """
+async def check_answer(req: CheckAnswerRequest) -> Dict:
+    """답안 확인 (주관식용)"""
     try:
-        user_answer = answer_data.get("user_answer", "").strip()
-        correct_answer = answer_data.get("correct_answer", "").strip()
+        user_answer = req.user_answer.strip()
+        correct_answer = req.correct_answer.strip()
 
         if not user_answer or not correct_answer:
             return {
@@ -161,22 +189,9 @@ async def check_answer(answer_data: Dict) -> Dict:
                 "message": "답변이 비어있습니다."
             }
 
-        # 📌 정답 체크 로직 (대소문자 무시, 공백 제거)
-        def normalize_answer(text: str) -> str:
-            """답안 정규화: 소문자 변환, 공백 제거, 특수문자 정리"""
-            import re
-            # 소문자 변환
-            text = text.lower()
-            # 앞뒤 공백 제거
-            text = text.strip()
-            # 연속된 공백을 하나로
-            text = re.sub(r'\s+', ' ', text)
-            return text
-
         normalized_user = normalize_answer(user_answer)
-        normalized_correct = normalize_answer(correct_answer)
 
-        # 📌 여러 정답이 있을 수 있음 (슬래시로 구분)
+        # 여러 정답이 있을 수 있음 (슬래시로 구분)
         correct_answers = [normalize_answer(ans.strip()) for ans in correct_answer.split('/')]
 
         is_correct = normalized_user in correct_answers
@@ -193,21 +208,14 @@ async def check_answer(answer_data: Dict) -> Dict:
 
 
 @router.post("/save-wrong-answer")
-async def save_wrong_answer(wrong_item: Dict) -> Dict:
-    """
-    오답을 별도 파일로 저장
-
-    Args:
-        wrong_item: 오답 항목 (category, question, answer)
-
-    Returns:
-        저장 성공 여부
-    """
+async def save_wrong_answer(req: SaveWrongAnswerRequest) -> Dict:
+    """오답을 별도 파일로 저장"""
     try:
-        # 현재 파일명 가져오기
-        current_filename = getattr(quiz_loader, 'current_filename', 'quiz')
+        current_filename = _sanitize_filename(
+            getattr(quiz_loader, 'current_filename', 'quiz')
+        )
         wrong_filename = f"{current_filename}_wrong.json"
-        wrong_file_path = Path("data") / wrong_filename
+        wrong_file_path = _get_data_dir() / wrong_filename
 
         # 기존 오답 파일 로드 또는 새로 생성
         if wrong_file_path.exists():
@@ -216,17 +224,12 @@ async def save_wrong_answer(wrong_item: Dict) -> Dict:
         else:
             wrong_data = {}
 
-        # 카테고리별로 저장
-        category = wrong_item.get('category', 'default')
-        question = wrong_item.get('question')
-        answer = wrong_item.get('answer')
-
+        category = req.category
         if category not in wrong_data:
             wrong_data[category] = {}
 
-        wrong_data[category][question] = answer
+        wrong_data[category][req.question] = req.answer
 
-        # 파일 저장
         with open(wrong_file_path, 'w', encoding='utf-8') as f:
             json.dump(wrong_data, f, ensure_ascii=False, indent=2)
 
@@ -252,7 +255,7 @@ async def find_images(text: str) -> Dict:
         발견된 이미지 파일 경로 목록
     """
     try:
-        img_dir = Path("data") / "img"
+        img_dir = _get_data_dir() / "img"
 
         if not img_dir.exists():
             return {
@@ -262,7 +265,7 @@ async def find_images(text: str) -> Dict:
             }
 
         # 이미지 확장자 목록
-        image_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']
+        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'}
 
         # 텍스트와 일치하는 이미지 파일 찾기
         found_images = []
@@ -284,5 +287,142 @@ async def find_images(text: str) -> Dict:
             "count": len(found_images)
         }
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ 학습 진도 저장/복원 ============
+
+def _get_progress_file() -> Path:
+    return _get_data_dir() / "progress.json"
+
+
+@router.get("/progress")
+async def get_progress() -> Dict:
+    """학습 진도 조회"""
+    try:
+        progress_file = _get_progress_file()
+        if progress_file.exists():
+            with open(progress_file, 'r', encoding='utf-8') as f:
+                progress = json.load(f)
+            return {"success": True, "progress": progress}
+        return {"success": True, "progress": None}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/progress")
+async def save_progress(data: ProgressData) -> Dict:
+    """학습 진도 저장"""
+    try:
+        progress = data.model_dump()
+        progress["quiz_file"] = quiz_loader.current_filename
+        progress["current_index"] = quiz_loader.current_index
+        with open(_get_progress_file(), 'w', encoding='utf-8') as f:
+            json.dump(progress, f, ensure_ascii=False, indent=2)
+        return {"success": True, "message": "Progress saved"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ 오답 복습 모드 ============
+
+@router.get("/wrong-answers")
+async def get_wrong_answers() -> Dict:
+    """현재 퀴즈 파일의 오답 목록 조회"""
+    try:
+        current_filename = _sanitize_filename(
+            getattr(quiz_loader, 'current_filename', 'quiz')
+        )
+        wrong_file_path = _get_data_dir() / f"{current_filename}_wrong.json"
+
+        if not wrong_file_path.exists():
+            return {"success": True, "wrong_answers": {}, "count": 0}
+
+        with open(wrong_file_path, 'r', encoding='utf-8') as f:
+            wrong_data = json.load(f)
+
+        total = sum(len(items) for items in wrong_data.values())
+        return {"success": True, "wrong_answers": wrong_data, "count": total}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/review-wrong")
+async def start_wrong_review() -> Dict:
+    """오답 복습 모드 시작 - 오답 데이터를 문제 풀로 로드"""
+    try:
+        current_filename = _sanitize_filename(
+            getattr(quiz_loader, 'current_filename', 'quiz')
+        )
+        wrong_file_path = _get_data_dir() / f"{current_filename}_wrong.json"
+
+        if not wrong_file_path.exists():
+            return {"success": False, "message": "오답 데이터가 없습니다."}
+
+        with open(wrong_file_path, 'r', encoding='utf-8') as f:
+            wrong_data = json.load(f)
+
+        if not wrong_data:
+            return {"success": False, "message": "오답 데이터가 비어있습니다."}
+
+        # 오답 데이터를 quiz_loader에 임시로 로드
+        quiz_loader.quiz_data = wrong_data
+        quiz_loader.use_categories = True
+        quiz_loader.rebuild_question_pool()
+
+        total = sum(len(items) for items in wrong_data.values())
+        return {
+            "success": True,
+            "message": f"오답 {total}개로 복습 모드를 시작합니다.",
+            "count": total
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ 누적 통계 ============
+
+def _get_stats_file() -> Path:
+    return _get_data_dir() / "session_stats.json"
+
+
+@router.get("/session-stats")
+async def get_session_stats() -> Dict:
+    """누적 세션 통계 조회"""
+    try:
+        stats_file = _get_stats_file()
+        if stats_file.exists():
+            with open(stats_file, 'r', encoding='utf-8') as f:
+                all_stats = json.load(f)
+            return {"success": True, "stats": all_stats}
+        return {"success": True, "stats": {"sessions": [], "total_questions": 0, "total_correct": 0}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/session-stats")
+async def save_session_stats(data: SessionStats) -> Dict:
+    """세션 통계 저장 (최근 50개 세션만 유지)"""
+    try:
+        stats_file = _get_stats_file()
+        existing = {"sessions": [], "total_questions": 0, "total_correct": 0}
+        if stats_file.exists():
+            with open(stats_file, 'r', encoding='utf-8') as f:
+                existing = json.load(f)
+
+        session_data = data.model_dump()
+        existing["sessions"].append(session_data)
+        existing["total_questions"] += data.total
+        existing["total_correct"] += data.correct
+
+        # 최근 50개 세션만 유지
+        if len(existing["sessions"]) > 50:
+            existing["sessions"] = existing["sessions"][-50:]
+
+        with open(stats_file, 'w', encoding='utf-8') as f:
+            json.dump(existing, f, ensure_ascii=False, indent=2)
+
+        return {"success": True, "message": "Session stats saved"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -4,10 +4,12 @@ Lexicon - FastAPI + PyWebView 데스크톱 앱
 import io
 import os
 import sys
+import secrets
 import threading
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -45,39 +47,17 @@ def safe_print(*args, **kwargs):
 import builtins
 builtins.print = safe_print
 
-# FastAPI 앱 초기화
-app = FastAPI(title="Lexicon API")
+# Shutdown 인증용 토큰 (프로세스 내부에서만 알 수 있음)
+_SHUTDOWN_TOKEN = secrets.token_urlsafe(32)
 
-# CORS 설정
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ============ 전역 경로 초기화 (최우선) ============
+# 모든 모듈보다 먼저 경로를 확정해야 빌드 환경에서도 올바른 위치를 참조합니다.
+from app.core import paths as app_paths
+app_paths.init()  # frozen 여부에 따라 자동 감지
 
-# PyInstaller 실행 파일 경로 처리
-def get_base_path():
-    """실행 파일 또는 스크립트의 기본 경로 반환"""
-    if getattr(sys, 'frozen', False):
-        # PyInstaller로 패키징된 실행 파일
-        return Path(sys.executable).parent
-    else:
-        # 일반 Python 스크립트
-        return Path(__file__).parent
-
-def get_resource_path(relative_path):
-    """번들된 리소스 파일 경로 반환 (static 등)"""
-    if getattr(sys, 'frozen', False):
-        # PyInstaller 임시 폴더에서 리소스 로드
-        base_path = Path(sys._MEIPASS)
-    else:
-        base_path = Path(__file__).parent
-    return base_path / relative_path
-
-# 정적 파일 경로 설정 (번들된 리소스)
-STATIC_DIR = get_resource_path("static")
+STATIC_DIR = app_paths.get_static_dir()
+BASE_DIR = app_paths.get_base_dir()
+DATA_DIR = app_paths.get_data_dir()
 
 if not STATIC_DIR.exists():
     print(f"경고: {STATIC_DIR} 폴더가 없습니다.")
@@ -89,9 +69,6 @@ else:
 
 import json
 
-# 데이터 폴더 경로 설정 (실행 파일 위치 기준)
-BASE_DIR = get_base_path()
-DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 print(f"✓ Data 폴더 생성/확인: {DATA_DIR.absolute()}")
 
@@ -170,6 +147,36 @@ if not quiz_wrong_file.exists():
         json.dump({}, f, ensure_ascii=False, indent=2)
     print(f"✓ 기본 quiz_wrong.json 생성: {quiz_wrong_file}")
 
+# ============ Lifespan (on_event 대체) ============
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """앱 시작/종료 시 리소스 관리"""
+    # startup
+    yield
+    # shutdown
+    try:
+        from app.llm.providers import close_shared_client
+        await close_shared_client()
+    except Exception:
+        pass
+
+# FastAPI 앱 초기화
+app = FastAPI(title="Lexicon API", lifespan=lifespan)
+
+# CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:8000", "http://localhost:8000"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+# ============ ConfigManager 초기화 ============
+from app.core.config import ConfigManager
+config_manager = ConfigManager.get_instance(config_file)
+
 # ============ API 엔드포인트 ============
 
 # API 엔드포인트 로드
@@ -205,12 +212,18 @@ async def read_root():
     """메인 페이지"""
     return FileResponse(STATIC_DIR / "index.html")
 
+# Health check 엔드포인트
+@app.get("/api/health")
+async def health_check():
+    """서버 준비 상태 확인"""
+    return {"status": "ok"}
 
-# 서버 종료 엔드포인트
+# 서버 종료 엔드포인트 (토큰 인증 필요)
 @app.post("/api/shutdown")
-async def shutdown():
-    """서버 종료 엔드포인트"""
-    import threading
+async def shutdown(x_shutdown_token: str = Header(None)):
+    """서버 종료 엔드포인트 (인증 필요)"""
+    if x_shutdown_token != _SHUTDOWN_TOKEN:
+        raise HTTPException(status_code=403, detail="Forbidden")
 
     def kill_server():
         time.sleep(0.5)  # 응답을 보낼 시간 확보
@@ -235,10 +248,27 @@ def run_uvicorn_server():
         use_colors=True
     )
 
+def wait_for_server(url: str = "http://127.0.0.1:8000/api/health", timeout: float = 10.0, interval: float = 0.3):
+    """서버가 준비될 때까지 health check 폴링"""
+    import urllib.request
+    import urllib.error
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                if resp.status == 200:
+                    return True
+        except (urllib.error.URLError, ConnectionError, OSError):
+            pass
+        time.sleep(interval)
+    return False
+
 def start_webview():
     """PyWebView 데스크톱 앱 시작"""
-    time.sleep(2)
-        
+    if not wait_for_server():
+        print("⚠️ 서버 준비 대기 시간 초과, 그래도 시작합니다...")
+
     window = webview.create_window(
         title='Lexicon',
         url='http://127.0.0.1:8000',
@@ -250,7 +280,7 @@ def start_webview():
         background_color='#f5f5f5',
 
     )
-    
+
     webview.start(debug=False)
 
 def main():

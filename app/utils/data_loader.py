@@ -1,5 +1,8 @@
 import json
 import os
+import re
+import uuid
+import threading
 from pathlib import Path
 from typing import Dict, List
 import random
@@ -8,48 +11,76 @@ import random
 class QuizDataLoader:
     """퀴즈 데이터 로드 및 관리 클래스"""
 
-    def __init__(self, data_dir: str = "data", images_dir: str = "images"):
-        self.data_dir = Path(data_dir)
-        self.images_dir = Path(images_dir)
+    def __init__(self, data_dir: str = None, images_dir: str = None):
+        # paths 레지스트리에서 절대경로 가져오기 (빌드 환경 대응)
+        from ..core import paths as app_paths
+        resolved_data = app_paths.get_data_dir()
+        self.data_dir = Path(data_dir).resolve() if data_dir else resolved_data
+        self.images_dir = Path(images_dir).resolve() if images_dir else (resolved_data / "img")
         self.quiz_data = {}
         self.config = {}
-        self.available_images = set()
-        self.use_categories = False  # 카테고리 사용 여부
-        self.current_filename = "quiz"  # 현재 파일명
-        self.question_pool = []  # 문제 풀
-        self.current_index = 0  # 현재 인덱스
+        self.available_images = {}  # {stem: extension} dict
+        self.use_categories = False
+        self.current_filename = "quiz"
+        self.question_pool = []
+        self.current_index = 0
+        self._lock = threading.Lock()
+        self._config_manager = None
         self.reload()
+
+    def _get_config_manager(self):
+        """ConfigManager lazy import to avoid circular dependency at startup"""
+        if self._config_manager is None:
+            try:
+                from ..core.config import ConfigManager
+                self._config_manager = ConfigManager.get_instance()
+            except Exception:
+                return None
+        return self._config_manager
+
+    def _resolve_data_dir(self) -> Path:
+        """ConfigManager의 data_dir이 있으면 사용, 아니면 paths 레지스트리"""
+        cm = self._get_config_manager()
+        if cm is not None:
+            return cm.data_dir.resolve()
+        return self.data_dir
 
     def reload(self, filename: str = None):
         """데이터 및 설정 다시 로드"""
-        self.load_config()
+        with self._lock:
+            self.load_config()
 
-        # 파일명이 주어지지 않으면 config에서 읽기
-        if filename is None:
-            filename = self.config.get("quiz_file", "quiz")
+            # 파일명이 주어지지 않으면 config에서 읽기
+            if filename is None:
+                filename = self.config.get("quiz_file", "quiz")
 
-        self.load_quiz_data(filename)
-        self.scan_images()
-        self.rebuild_question_pool()  # 문제 풀 재구성
+            self.load_quiz_data(filename)
+            self.scan_images()
+            self._rebuild_question_pool_internal()
 
     def get_available_json_files(self) -> List[str]:
         """data 디렉토리의 사용 가능한 JSON 파일 목록 반환"""
         json_files = []
-        if self.data_dir.exists():
-            for file in self.data_dir.glob("*.json"):
+        data_dir = self._resolve_data_dir()
+        if data_dir.exists():
+            for file in data_dir.glob("*.json"):
                 # config.json은 제외
                 if file.name != "config.json":
                     json_files.append(file.stem)  # 확장자 없는 파일명
         return sorted(json_files)
 
     def load_config(self):
-        """config.json 로드"""
+        """config.json 로드 (ConfigManager 우선, fallback으로 직접 읽기)"""
+        cm = self._get_config_manager()
+        if cm is not None:
+            self.config = cm.get_all()
+            return
+
         config_path = self.data_dir / "config.json"
         if config_path.exists():
             with open(config_path, 'r', encoding='utf-8') as f:
                 self.config = json.load(f)
         else:
-            # 기본 설정
             self.config = {
                 "language1": "ko",
                 "language2": "en",
@@ -67,14 +98,8 @@ class QuizDataLoader:
                     "subjective": True
                 },
                 "order_mode": "random",
-                "quiz_file": "quiz"  # 기본 파일명
+                "quiz_file": "quiz"
             }
-
-    def save_config(self):
-        """config.json 저장"""
-        config_path = self.data_dir / "config.json"
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(self.config, f, ensure_ascii=False, indent=2)
 
     def load_quiz_data(self, filename: str = "quiz.json"):
         """quiz.json 로드 (카테고리 구조 지원)"""
@@ -82,7 +107,8 @@ class QuizDataLoader:
         base_filename = filename.replace('.json', '')
         self.current_filename = base_filename
 
-        quiz_path = self.data_dir / f"{base_filename}.json"
+        data_dir = self._resolve_data_dir()
+        quiz_path = data_dir / f"{base_filename}.json"
         if quiz_path.exists():
             with open(quiz_path, 'r', encoding='utf-8') as f:
                 raw_data = json.load(f)
@@ -108,22 +134,20 @@ class QuizDataLoader:
             self.use_categories = False
 
     def scan_images(self):
-        """images 폴더 스캔"""
-        self.available_images = set()
-        if self.images_dir.exists():
-            for file in self.images_dir.glob("*.png"):
-                self.available_images.add(file.stem)
-            for file in self.images_dir.glob("*.jpg"):
-                self.available_images.add(file.stem)
-            for file in self.images_dir.glob("*.jpeg"):
-                self.available_images.add(file.stem)
+        """images 폴더 스캔 (다양한 확장자 지원)"""
+        self.available_images = {}
+        image_extensions = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'}
+        data_dir = self._resolve_data_dir()
+        img_dir = data_dir / "img"
+        if img_dir.exists():
+            for file in img_dir.iterdir():
+                if file.is_file() and file.suffix.lower() in image_extensions:
+                    self.available_images[file.stem] = file.suffix.lower()
 
     def detect_language(self, text: str) -> str:
         """텍스트의 언어 감지"""
         if not text:
             return 'en'
-
-        import re
 
         # 한글 감지
         if re.search(r'[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]', text):
@@ -217,6 +241,11 @@ class QuizDataLoader:
 
     def rebuild_question_pool(self):
         """선택된 카테고리의 문제들로 문제 풀 재구성"""
+        with self._lock:
+            self._rebuild_question_pool_internal()
+
+    def _rebuild_question_pool_internal(self):
+        """내부용 문제 풀 재구성 (lock 없이)"""
         self.question_pool = []
         self.current_index = 0
 
@@ -252,12 +281,17 @@ class QuizDataLoader:
 
     def generate_quiz_question(self) -> Dict:
         """퀴즈 문제 생성 (카테고리 지원, 순서 및 중복 방지)"""
+        with self._lock:
+            return self._generate_quiz_question_internal()
+
+    def _generate_quiz_question_internal(self) -> Dict:
+        """내부용 문제 생성 (lock 없이)"""
         if not self.quiz_data:
             return None
 
         # 문제 풀이 비어있거나 모두 소진된 경우 재구성
         if not self.question_pool or self.current_index >= len(self.question_pool):
-            self.rebuild_question_pool()
+            self._rebuild_question_pool_internal()
 
         # 문제 풀이 여전히 비어있으면 None 반환
         if not self.question_pool:
@@ -274,7 +308,11 @@ class QuizDataLoader:
 
         # 이미지 확인
         has_image = correct_lang1 in self.available_images
-        image_path = f"/images/{correct_lang1}.png" if has_image else None
+        if has_image:
+            ext = self.available_images[correct_lang1]
+            image_path = f"/data/img/{correct_lang1}{ext}"
+        else:
+            image_path = None
 
         # 패턴 및 타입 선택 (이미지 유무 고려)
         pattern = self.get_random_pattern(has_image)
@@ -309,7 +347,7 @@ class QuizDataLoader:
 
     def _create_question(self, pattern: str, lang1: str, lang2: str, image_path: str) -> Dict:
         """패턴에 따른 문제 생성"""
-        question_id = f"q_{random.randint(1000, 9999)}"
+        question_id = f"q_{uuid.uuid4().hex[:8]}"
 
         if pattern == "A>B":
             return {
@@ -397,7 +435,7 @@ class QuizDataLoader:
 
     def _create_options(self, pattern: str, correct_lang1: str, correct_lang2: str,
                        image_path: str, all_items: List[str], category: str) -> List[Dict]:
-        """객관식 보기 생성 (4지선다)"""
+        """객관식 보기 생성 (4지선다) - is_correct를 클라이언트에 노출하지 않음"""
         options = []
 
         # 오답 3개 선택 (정답과 다른 것만)
@@ -439,12 +477,11 @@ class QuizDataLoader:
         # 섞기
         random.shuffle(all_choices)
 
-        # 옵션 객체 생성
+        # 옵션 객체 생성 (is_correct 미포함 - 정답은 question.answer로 비교)
         for idx, choice in enumerate(all_choices):
             options.append({
                 "id": f"opt_{idx}",
-                "text": choice,
-                "is_correct": choice == correct_text
+                "text": choice
             })
 
         return options

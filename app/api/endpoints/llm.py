@@ -4,75 +4,32 @@ LLM 설정 및 채팅 API 엔드포인트
 import json
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from fastapi.responses import StreamingResponse
+from typing import Dict
 
 from app.llm import LLMService
+from ...models.requests import (
+    LLMConfig, LLMPromptConfig, LLMFullConfig, LLMChatRequest
+)
+from ...models.responses import (
+    LLMConfigResponse, LLMTestResponse, LLMChatResponse
+)
 
 router = APIRouter()
 
-# config.json 파일 경로
-CONFIG_FILE = Path(__file__).parent.parent.parent.parent / "data" / "config.json"
+# config.json 파일 경로 (빌드 환경 대응)
+from ...core import paths as app_paths
+CONFIG_FILE = app_paths.get_config_path()
 
 # LLM 서비스 인스턴스
 llm_service = LLMService(CONFIG_FILE)
 
 
-# ============ 모델 정의 ============
-
-class LLMConfig(BaseModel):
-    """LLM 기본 설정 모델"""
-    llm_model: str
-    api_key: str
-
-
-class LLMPromptConfig(BaseModel):
-    """LLM 프롬프트 설정 모델"""
-    persona: str
-    custom_system_prompt: Optional[str] = ""
-    temperature: Optional[float] = 0.7
-    max_tokens: Optional[int] = 1024
-
-
-class LLMFullConfig(BaseModel):
-    """LLM 전체 설정 모델"""
-    llm_model: str
-    api_key: str
-    prompts: LLMPromptConfig
-
-
-class LLMConfigResponse(BaseModel):
-    """LLM 설정 응답 모델"""
-    llm_model: str = ""
-    api_key: str = ""
-    prompts: Dict[str, Any] = {}
-    has_config: bool = False
-
-
-class LLMTestResponse(BaseModel):
-    """LLM 연결 테스트 응답 모델"""
-    success: bool
-    status: str  # "connected", "warning", "disconnected"
-    message: str
-
-
-class LLMChatRequest(BaseModel):
-    """LLM 채팅 요청 모델"""
-    question: str
-    context: Optional[Dict[str, Any]] = None
-
-
-class LLMChatResponse(BaseModel):
-    """LLM 채팅 응답 모델"""
-    success: bool
-    response: str
-    error: str = ""
-
-
-class PersonaInfo(BaseModel):
-    """페르소나 정보 모델"""
-    name: str
-    description: str
+def _mask_api_key(key: str) -> str:
+    """API 키를 마스킹하여 반환 (앞 4자, 뒤 4자만 노출)"""
+    if not key or len(key) <= 8:
+        return "****" if key else ""
+    return f"{key[:4]}...{key[-4:]}"
 
 
 # ============ 엔드포인트 ============
@@ -85,7 +42,7 @@ async def get_llm_config():
 
         return LLMConfigResponse(
             llm_model=config.get("model", ""),
-            api_key=config.get("api_key", ""),
+            api_key=_mask_api_key(config.get("api_key", "")),
             prompts=config.get("prompts", {}),
             has_config=config.get("has_config", False)
         )
@@ -228,3 +185,28 @@ async def llm_chat(request: LLMChatRequest):
             response="",
             error=f"LLM 요청 실패: {str(e)}"
         )
+
+
+@router.post("/chat/stream")
+async def llm_chat_stream(request: LLMChatRequest):
+    """LLM 스트리밍 채팅 (SSE)"""
+    async def event_generator():
+        try:
+            async for chunk in llm_service.chat_stream(
+                question=request.question,
+                context=request.context
+            ):
+                yield f"data: {json.dumps({'text': chunk}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
