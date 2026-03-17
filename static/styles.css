@@ -2287,6 +2287,34 @@ body {
     color: var(--color-text-secondary);
 }
 
+/* API 키 입력 wrapper */
+.api-key-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.api-key-wrapper .settings-input {
+    flex: 1;
+    padding-right: 40px;
+}
+
+.api-key-toggle {
+    position: absolute;
+    right: 8px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.api-key-toggle:hover {
+    opacity: 1;
+}
+
 /* ============================================
    LLM 연결 상태 표시
    ============================================ */
@@ -2486,31 +2514,108 @@ body {
 }
 
 .llm-message-content {
+    position: relative;
     padding: var(--space-16) var(--space-20);
     border-radius: var(--radius-md);
     font-size: var(--font-size-base);
-    line-height: 1.6;
+    line-height: 1.7;
     word-wrap: break-word;
     word-break: break-word;
     overflow-wrap: break-word;
     white-space: pre-wrap;
-    cursor: pointer;
+    cursor: text;
     user-select: text;
-    transition: all 0.2s ease;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
 }
 
-.llm-message-content:hover {
-    opacity: 0.8;
+.llm-message-content:hover .llm-copy-btn {
+    opacity: 1;
 }
 
-.llm-message-content.copied {
-    background: rgba(34, 197, 94, 0.2) !important;
-    animation: copyFlash 0.5s ease;
+/* 마크다운 렌더링 스타일 */
+.llm-message.assistant .llm-message-content {
+    white-space: normal;
 }
 
-@keyframes copyFlash {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.02); }
+.llm-message-content h1,
+.llm-message-content h2,
+.llm-message-content h3 {
+    margin: 12px 0 6px 0;
+    font-size: 1.05em;
+    font-weight: 700;
+}
+
+.llm-message-content h1 { font-size: 1.15em; }
+
+.llm-message-content p {
+    margin: 4px 0;
+}
+
+.llm-message-content ul,
+.llm-message-content ol {
+    margin: 4px 0;
+    padding-left: 20px;
+}
+
+.llm-message-content li {
+    margin: 2px 0;
+}
+
+.llm-message-content code {
+    background: rgba(0, 0, 0, 0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.9em;
+}
+
+.llm-message-content pre {
+    background: rgba(0, 0, 0, 0.06);
+    padding: 8px 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 6px 0;
+}
+
+.llm-message-content pre code {
+    background: none;
+    padding: 0;
+}
+
+.llm-message-content strong {
+    font-weight: 700;
+}
+
+.llm-message-content em {
+    font-style: italic;
+}
+
+.llm-message-content blockquote {
+    border-left: 3px solid var(--color-primary);
+    padding-left: 10px;
+    margin: 6px 0;
+    opacity: 0.85;
+}
+
+/* 복사 버튼 */
+.llm-copy-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.llm-copy-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
 }
 
 .llm-message.user .llm-message-content {

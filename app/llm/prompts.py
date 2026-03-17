@@ -71,7 +71,9 @@ class PromptManager:
         if context:
             context_info = self._format_context(context)
             if context_info:
-                system_prompt += f"\n\n현재 학습 컨텍스트:\n{context_info}"
+                system_prompt += f"\n\n[참고 컨텍스트 - 사용자가 현재 학습 중인 내용입니다. 사용자의 질문과 관련될 때만 참고하세요.]\n{context_info}"
+
+        system_prompt += "\n\n중요 규칙:\n1. 반드시 사용자의 실제 질문에 직접 답변하세요. 컨텍스트 정보는 질문과 관련될 때만 참고하고, 질문과 무관하면 무시하세요.\n2. 답변은 간결하고 핵심 위주로 작성하세요. 불필요하게 길거나 장황한 답변은 피하세요."
 
         messages.append({
             "role": "system",

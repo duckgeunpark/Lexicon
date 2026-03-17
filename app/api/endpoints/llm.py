@@ -42,7 +42,7 @@ async def get_llm_config():
 
         return LLMConfigResponse(
             llm_model=config.get("model", ""),
-            api_key=_mask_api_key(config.get("api_key", "")),
+            api_key=config.get("api_key", ""),
             prompts=config.get("prompts", {}),
             has_config=config.get("has_config", False)
         )

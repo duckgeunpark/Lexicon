@@ -174,6 +174,19 @@ function initEventListeners() {
     elements.llmTemperature.addEventListener('input', updateTemperatureValue);
     elements.llmMaxTokens.addEventListener('input', updateMaxTokensValue);
 
+    // API 키 표시/숨기기 토글
+    document.getElementById('toggleApiKeyBtn')?.addEventListener('click', () => {
+        const input = elements.llmApiKey;
+        const icon = document.getElementById('eyeIcon');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.textContent = '🙈';
+        } else {
+            input.type = 'password';
+            icon.textContent = '👁️‍🗨️';
+        }
+    });
+
     // LLM 질문 관련 이벤트 리스너
     elements.llmHelpBtn.addEventListener('click', openLlmHelp);
     elements.closeLlmModal.addEventListener('click', closeLlmHelp);
@@ -1807,6 +1820,25 @@ function clearLlmChat() {
 
 }
 
+// marked.js 설정
+if (typeof marked !== 'undefined') {
+    marked.setOptions({
+        breaks: true,
+        gfm: true
+    });
+}
+
+function renderMarkdown(text) {
+    /**
+     * marked.js를 사용한 마크다운 렌더링
+     */
+    if (typeof marked !== 'undefined') {
+        return marked.parse(text);
+    }
+    // fallback: 줄바꿈만 처리
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+}
+
 function createChatMessage(text, isUser = false) {
     /**
      * 채팅 메시지 버블 생성
@@ -1828,7 +1860,12 @@ function createChatMessage(text, isUser = false) {
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'llm-message-content';
-    contentDiv.textContent = text;
+
+    if (isUser) {
+        contentDiv.textContent = text;
+    } else {
+        contentDiv.innerHTML = renderMarkdown(text);
+    }
 
     // 시간 표시
     const timeDiv = document.createElement('div');
@@ -1838,20 +1875,25 @@ function createChatMessage(text, isUser = false) {
     const minutes = String(now.getMinutes()).padStart(2, '0');
     timeDiv.textContent = `${hours}:${minutes}`;
 
-    // 더블클릭으로 클립보드 복사
-    contentDiv.addEventListener('dblclick', async () => {
-        try {
-            await navigator.clipboard.writeText(text);
-            contentDiv.classList.add('copied');
-            showToast('📋 클립보드에 복사되었습니다', 1000);
-            setTimeout(() => {
-                contentDiv.classList.remove('copied');
-            }, 500);
-        } catch (error) {
-            console.error('클립보드 복사 실패:', error);
-            showToast('❌ 복사 실패', 1000);
-        }
-    });
+    // 복사 버튼 (assistant 메시지만)
+    if (!isUser) {
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'llm-copy-btn';
+        copyBtn.textContent = '📋';
+        copyBtn.title = '복사';
+        copyBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            try {
+                await navigator.clipboard.writeText(text || contentDiv.innerText);
+                showToast('📋 클립보드에 복사되었습니다', 1000);
+                copyBtn.textContent = '✅';
+                setTimeout(() => { copyBtn.textContent = '📋'; }, 1000);
+            } catch (error) {
+                showToast('❌ 복사 실패', 1000);
+            }
+        });
+        contentDiv.appendChild(copyBtn);
+    }
 
     contentWrapper.appendChild(contentDiv);
     contentWrapper.appendChild(timeDiv);
@@ -1940,7 +1982,7 @@ async function sendLlmQuestion() {
             // 스트리밍 응답
             const assistantMessage = createChatMessage('', false);
             elements.llmChatMessages.appendChild(assistantMessage);
-            const textEl = assistantMessage.querySelector('.llm-message-text') || assistantMessage.querySelector('p') || assistantMessage;
+            const contentEl = assistantMessage.querySelector('.llm-message-content');
             let fullText = '';
 
             const reader = response.body.getReader();
@@ -1961,14 +2003,43 @@ async function sendLlmQuestion() {
                             const data = JSON.parse(line.slice(6));
                             if (data.text) {
                                 fullText += data.text;
-                                textEl.textContent = fullText;
+                                // 스트리밍 중에는 plain text, 복사 버튼 유지
+                                const copyBtn = contentEl.querySelector('.llm-copy-btn');
+                                contentEl.textContent = fullText;
+                                if (copyBtn) contentEl.appendChild(copyBtn);
                                 scrollChatToBottom();
                             }
                             if (data.error) {
-                                textEl.textContent = `오류: ${data.error}`;
+                                contentEl.textContent = `오류: ${data.error}`;
                             }
                         } catch (e) {}
                     }
+                }
+            }
+            // 스트리밍 완료 후 마크다운 렌더링
+            if (fullText) {
+                const copyBtn = contentEl.querySelector('.llm-copy-btn');
+                contentEl.innerHTML = renderMarkdown(fullText);
+                if (copyBtn) {
+                    contentEl.appendChild(copyBtn);
+                } else {
+                    // 복사 버튼 재생성
+                    const newCopyBtn = document.createElement('button');
+                    newCopyBtn.className = 'llm-copy-btn';
+                    newCopyBtn.textContent = '📋';
+                    newCopyBtn.title = '복사';
+                    newCopyBtn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        try {
+                            await navigator.clipboard.writeText(fullText);
+                            showToast('📋 클립보드에 복사되었습니다', 1000);
+                            newCopyBtn.textContent = '✅';
+                            setTimeout(() => { newCopyBtn.textContent = '📋'; }, 1000);
+                        } catch (error) {
+                            showToast('❌ 복사 실패', 1000);
+                        }
+                    });
+                    contentEl.appendChild(newCopyBtn);
                 }
             }
         } else {
